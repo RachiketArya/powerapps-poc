@@ -9,7 +9,12 @@ import {
   type RevisionBinding,
 } from "./api";
 
-export function Activity() {
+/**
+ * `actorId` is a dependency, not decoration: oversight data belongs to the
+ * identity that read it, so switching demo identity must clear and refetch it
+ * rather than leave an administrator's events on a maker's screen.
+ */
+export function Activity({ actorId }: { actorId: string }) {
   const [platform, setPlatform] = useState<PlatformEvent[]>([]);
   const [decisions, setDecisions] = useState<DecisionEvent[]>([]);
   const [oversightError, setOversightError] = useState<string | null>(null);
@@ -23,18 +28,35 @@ export function Activity() {
   } | null>(null);
 
   useEffect(() => {
+    let current = true;
+    setPlatform([]);
+    setDecisions([]);
+    setOversightError(null);
+    setAssurance(null);
     void api
       .activity()
       .then((res) => {
+        if (!current) return;
         setPlatform(res.platform);
         setDecisions(res.decisions);
         setOversightError(null);
       })
       .catch((err: unknown) => {
+        if (!current) return;
         setOversightError(err instanceof ApiError ? err.message : "Activity could not be loaded.");
       });
-    void api.assurance().then(setAssurance);
-  }, []);
+    void api.assurance().then(
+      (res) => {
+        if (current) setAssurance(res);
+      },
+      () => {
+        if (current) setAssurance(null);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [actorId]);
 
   return (
     <div className="surface">

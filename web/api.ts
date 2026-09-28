@@ -100,7 +100,6 @@ export interface RecordSummary {
 export interface RecordDetail extends RecordSummary {
   /** Present only when the app definition requested `audit.read`. */
   events?: DecisionEvent[];
-  payment?: { id: string; reference: string; amount_cents: number; currency: string; customer_label: string };
   remaining_refundable_cents?: number;
 }
 
@@ -240,7 +239,11 @@ export const STATUS_LABEL: Record<string, string> = {
 const FIELD_LABELS: Record<string, string> = {
   id: "Reference",
   payment_id: "Payment",
-  amount_cents: "Amount",
+  payment_reference: "Payment reference",
+  payment_amount_cents: "Payment amount",
+  payment_captured_at: "Payment captured",
+  customer_label: "Customer",
+  amount_cents: "Refund amount",
   reason: "Requested reason",
   status: "Status",
   requester_name: "Requested by",
@@ -264,7 +267,10 @@ export function fieldLabel(field: string): string {
 export function fieldValue(record: Record<string, unknown>, field: string): string {
   const value = record[field];
   if (value === null || value === undefined || value === "") return "—";
-  if (field.endsWith("_cents") && typeof value === "number") return formatCents(value);
+  if (field.endsWith("_cents") && typeof value === "number") {
+    const currency = record["payment_currency"];
+    return formatCents(value, typeof currency === "string" ? currency : undefined);
+  }
   if (field === "status" && typeof value === "string") return STATUS_LABEL[value] ?? value;
   if (field.endsWith("_at") && typeof value === "string") return formatTime(value);
   if (field === "verification_channel" && typeof value === "string") return value.replace(/_/g, " ");

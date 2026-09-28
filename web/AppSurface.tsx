@@ -271,21 +271,6 @@ function DetailPanel({
             <dd>{fieldValue(record, f)}</dd>
           </div>
         ))}
-        {record.payment && (
-          <div>
-            <dt>Payment</dt>
-            <dd>
-              {record.payment.reference} · {formatCents(record.payment.amount_cents, record.payment.currency)} ·{" "}
-              {record.payment.customer_label}
-            </dd>
-          </div>
-        )}
-        {typeof record.remaining_refundable_cents === "number" && (
-          <div>
-            <dt>Remaining refundable</dt>
-            <dd>{formatCents(record.remaining_refundable_cents)}</dd>
-          </div>
-        )}
       </dl>
 
       {error && <p className="notice denied">{error}</p>}

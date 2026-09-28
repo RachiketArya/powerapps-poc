@@ -111,7 +111,7 @@ export default function App() {
             <Catalog apps={catalog} onOpen={(appId) => setView({ kind: "app", appId })} />
           )}
           {actor && view.kind === "workshop" && <Workshop actor={actor} onPromoted={() => void refreshCatalog()} />}
-          {actor && view.kind === "activity" && <Activity />}
+          {actor && view.kind === "activity" && <Activity actorId={actor.id} />}
           {actor && view.kind === "app" && current && current.status === "active" && (
             <AppSurface key={`${current.appId}-${current.version}`} app={current} actor={actor} />
           )}

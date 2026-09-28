@@ -9,6 +9,7 @@ import {
   type DecisionAction,
 } from "../kernel/decision-service.js";
 import { ValidationError } from "./refund-review.js";
+import { getWorkflow } from "./index.js";
 
 /**
  * Second queue on the SAME shared decision service. Everything generic
@@ -191,6 +192,9 @@ export function decideVendorBankChange(
     entityType: "vendor_bank_change",
     entityId: args.id,
     actor,
+    // Read from the registry at decision time: the registry is the single
+    // source of truth for who may decide, for the API as well as the UI.
+    decisionRoles: getWorkflow("vendor_bank_change_review")!.decisionRoles,
     action: args.action,
     reason: args.reason,
     expectedVersion: args.expectedVersion,

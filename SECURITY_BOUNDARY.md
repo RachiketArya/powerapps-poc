@@ -41,6 +41,7 @@ Apps on the same workflow read the same records: there are no per-app or per-ten
 **Runtime business controls (ported from Decision Desk)**
 
 - No session → `401`. Viewer → `403`. Actor and role fields in request bodies are never read.
+- Who may decide comes from one place: the workflow's `decisionRoles` in the platform registry. The kernel has no role of its own, and both the API and the UI read the same value, so narrowing platform policy narrows the API and not only the buttons.
 - An approver cannot decide their own request, regardless of role.
 - A reason is required; the vendor workflow additionally requires a 20-character approval reason and refuses approval when the only verification was an inbound email.
 - Optimistic versions: a stale `expectedVersion` is refused.

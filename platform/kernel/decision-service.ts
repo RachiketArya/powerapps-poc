@@ -35,6 +35,12 @@ export interface DecisionRequest<T extends DecidableRecord> {
   entityType: EntityType;
   entityId: string;
   actor: Actor;
+  /**
+   * Roles the platform registry lets decide this entity. The kernel has no
+   * opinion of its own: narrowing a workflow's `decisionRoles` changes what
+   * the API accepts, not only what the UI offers.
+   */
+  decisionRoles: readonly Role[];
   action: DecisionAction;
   reason: string;
   expectedVersion: number;
@@ -109,6 +115,7 @@ export function decide<T extends DecidableRecord>(req: DecisionRequest<T>): Deci
     entityType,
     entityId,
     actor,
+    decisionRoles,
     action,
     expectedVersion,
     validate,
@@ -123,7 +130,7 @@ export function decide<T extends DecidableRecord>(req: DecisionRequest<T>): Deci
     const record = readRecord<T>(db, table, entityId);
     if (!record) throw new DecisionError("not_found", "Record not found", 404);
 
-    if (actor.role !== "approver") {
+    if (!decisionRoles.includes(actor.role)) {
       throw new DecisionError(
         "forbidden_role",
         `Role '${actor.role}' may not decide ${entityType} records`,

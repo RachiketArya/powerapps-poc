@@ -150,3 +150,20 @@ export function allWorkflows(): WorkflowSpec[] {
 export function workflowKeys(): string[] {
   return [...WORKFLOW_MAP.keys()];
 }
+
+/**
+ * Applies a platform policy change to a registered workflow's decision roles,
+ * the way a platform owner editing this registry would. It exists so a test
+ * can prove the *server* follows `decisionRoles`, rather than the UI reading
+ * one source of truth while the kernel hard-codes another. Returns a function
+ * that restores the previous value.
+ */
+export function setDecisionRoles(key: string, roles: readonly Role[]): () => void {
+  const spec = WORKFLOW_MAP.get(key);
+  if (!spec) throw new Error(`Unknown workflow '${key}'`);
+  const previous = spec.decisionRoles;
+  WORKFLOW_MAP.set(key, { ...spec, decisionRoles: roles });
+  return () => {
+    WORKFLOW_MAP.set(key, { ...WORKFLOW_MAP.get(key)!, decisionRoles: previous });
+  };
+}

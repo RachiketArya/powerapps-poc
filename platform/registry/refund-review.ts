@@ -8,6 +8,7 @@ import {
   type DecidableRecord,
   type DecisionAction,
 } from "../kernel/decision-service.js";
+import { getWorkflow } from "./index.js";
 
 export interface RefundRequestRow extends DecidableRecord {
   payment_id: string;
@@ -51,7 +52,7 @@ export function remainingRefundableCents(db: Db, paymentId: string): number {
 export function listRefunds(
   db: Db,
   opts: { status?: string; q?: string },
-): Array<RefundRequestRow & { payment: PaymentRow; requester_name: string; decider_name: string | null }> {
+): ReturnType<typeof shapeRow>[] {
   const clauses: string[] = [];
   const params: unknown[] = [];
   if (opts.status && opts.status !== "all") {
@@ -129,14 +130,15 @@ function shapeRow(row: Record<string, never>) {
     decider_name: (row["decider_name"] as unknown as string) ?? null,
     decided_at: r.decided_at,
     decision_reason: r.decision_reason,
-    payment: {
-      id: r.payment_id,
-      reference: row["reference"] as unknown as string,
-      customer_label: row["customer_label"] as unknown as string,
-      amount_cents: row["payment_amount_cents"] as unknown as number,
-      currency: row["currency"] as unknown as string,
-      captured_at: row["captured_at"] as unknown as string,
-    },
+    // The adapter answers in the registry's field vocabulary, flat, so a
+    // definition selecting `payment_reference` gets a value instead of a
+    // nested object the surface would have to know how to unpack. Payment
+    // details appear once, under these names only.
+    payment_reference: row["reference"] as unknown as string,
+    customer_label: row["customer_label"] as unknown as string,
+    payment_amount_cents: row["payment_amount_cents"] as unknown as number,
+    payment_currency: row["currency"] as unknown as string,
+    payment_captured_at: row["captured_at"] as unknown as string,
   };
 }
 
@@ -214,6 +216,9 @@ export function decideRefund(
     entityType: "refund_request",
     entityId: args.id,
     actor,
+    // Read from the registry at decision time: the registry is the single
+    // source of truth for who may decide, for the API as well as the UI.
+    decisionRoles: getWorkflow("refund_review")!.decisionRoles,
     action: args.action,
     reason: args.reason,
     expectedVersion: args.expectedVersion,

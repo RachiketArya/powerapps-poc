@@ -15,7 +15,7 @@ import { openDb, type Db } from "../kernel/db.js";
 import { seed } from "../kernel/seed.js";
 import { digestOf, validateDefinition } from "./schema.js";
 import { loadApp, promoteDefinition, PromotionError } from "./store.js";
-import { getWorkflow } from "../registry/index.js";
+import { getWorkflow, setDecisionRoles } from "../registry/index.js";
 
 const ADMIN = "u_adm_rhea";
 const APPROVER = "u_apr_theo";
@@ -253,6 +253,89 @@ describe("workflow lookup is not reachable through Object prototype keys", () =>
     const res = await request(app).get("/api/apps/proto-persisted/records").set("Cookie", cookie);
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("app_quarantined");
+  });
+});
+
+describe("the registry is the single source of truth for decision roles", () => {
+  it("enforces a narrowed decisionRoles policy on the API, not only in the UI", async () => {
+    const cookie = await login(APPROVER);
+    const ok = await request(app)
+      .post("/api/apps/refund-review/records/rr_2001/decision")
+      .set("Cookie", cookie)
+      .send({ decision: "approve", reason: "verified against the payment", expectedVersion: 1 });
+    expect(ok.status).toBe(200);
+
+    // Platform policy change: no role may decide refunds any more.
+    const restore = setDecisionRoles("refund_review", []);
+    try {
+      const res = await request(app)
+        .post("/api/apps/refund-review/records/rr_2002/decision")
+        .set("Cookie", cookie)
+        .send({ decision: "approve", reason: "verified against the payment", expectedVersion: 1 });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("forbidden_role");
+      expect(
+        (db.prepare(`SELECT status FROM refund_requests WHERE id = 'rr_2002'`).get() as { status: string }).status,
+      ).toBe("pending");
+
+      const registry = await request(app).get("/api/platform/registry").set("Cookie", cookie);
+      const refund = (registry.body.workflows as Array<{ key: string; decisionRoles: string[] }>).find(
+        (w) => w.key === "refund_review",
+      )!;
+      // What the UI reads and what the API enforces are the same value.
+      expect(refund.decisionRoles).toEqual([]);
+    } finally {
+      restore();
+    }
+
+    const after = await request(app)
+      .post("/api/apps/refund-review/records/rr_2002/decision")
+      .set("Cookie", cookie)
+      .send({ decision: "approve", reason: "verified against the payment", expectedVersion: 1 });
+    expect(after.status).toBe(200);
+  });
+
+  it("enforces a narrowed policy on the vendor workflow too", async () => {
+    const restore = setDecisionRoles("vendor_bank_change_review", ["platform_admin"]);
+    try {
+      const res = await request(app)
+        .post("/api/apps/vendor-bank-change-review/records/vbc_3001/decision")
+        .set("Cookie", await login(APPROVER))
+        .send({
+          decision: "approve",
+          reason: "callback to the known number confirmed the new account",
+          expectedVersion: 1,
+        });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("forbidden_role");
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("the data adapter answers in the registry's field vocabulary", () => {
+  it("returns every declared list and detail field as a value, not a nested object", async () => {
+    const cookie = await login(APPROVER);
+    const workflow = getWorkflow("refund_review")!;
+
+    const list = await request(app).get("/api/apps/refund-review/records?status=all").set("Cookie", cookie);
+    expect(list.status).toBe(200);
+    const row = (list.body.records as Array<Record<string, unknown>>).find((r) => r["id"] === "rr_2001")!;
+    for (const field of workflow.listFields) {
+      expect(row[field], `list field ${field}`).not.toBeUndefined();
+      expect(row[field], `list field ${field}`).not.toBeNull();
+    }
+    expect(row["payment_reference"]).toMatch(/^SYN-PAY-/);
+
+    const detail = await request(app).get("/api/apps/refund-review/records/rr_2001").set("Cookie", cookie);
+    const record = detail.body.record as Record<string, unknown>;
+    for (const field of workflow.detailFields) {
+      expect(record[field], `detail field ${field}`).not.toBeUndefined();
+    }
+    expect(typeof record["payment_amount_cents"]).toBe("number");
+    // Payment details are carried once, in the registry's vocabulary.
+    expect(record["payment"]).toBeUndefined();
   });
 });
 
