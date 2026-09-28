@@ -30,7 +30,13 @@ Every item below has at least one test in `platform/**/*.test.ts` that calls the
 
 - Reads (`queue.read`, `record.read`), creates (`record.create`) and decisions (`decision.approve` / `decision.reject`) each require the capability in the active definition. A definition that narrows its capability set is enforced on direct API calls, not only by hiding buttons.
 - Capabilities narrow what an app offers; they never widen what a role may do. `platform_admin` can activate an app but is not in any workflow's decision roles, so it cannot approve or reject business records.
-- There are no unscoped legacy routes: all record access goes through `/api/apps/:appId/records`, so an app's constraints cannot be side-stepped by addressing the workflow directly.
+- There are no unscoped legacy routes: all record access goes through `/api/apps/:appId/records`, so an app's constraints cannot be side-stepped by addressing the workflow directly. Payment options are `/api/apps/:appId/payments` and require `record.create` on a refund workflow.
+- `audit.read` governs record history. Without it, detail, create and decision responses carry no `events` array and `/api/apps/:appId/records/:id/audit` is `403 capability_not_granted`.
+- Cross-app activity (`/api/activity`) is platform oversight and is restricted to `platform_admin`. Per-record history belongs to an app that holds `audit.read`.
+
+**Capability narrowing is a per-app surface control, not user data isolation**
+
+Apps on the same workflow read the same records: there are no per-app or per-tenant record entitlements. Narrowing an app's capabilities constrains *that app's* surface, and it is enforced server-side for that app — but if the same user may also use a broader app on the same workflow, they reach the same data through it. Do not treat an app's capability set as a data boundary for a user.
 
 **Runtime business controls (ported from Decision Desk)**
 
@@ -51,7 +57,9 @@ Every item below has at least one test in `platform/**/*.test.ts` that calls the
 - **Connectors.** `synthetic.payments.local` and `synthetic.vendor-master.local` are in-process readers over seeded SQLite tables. They are an allow-list for *which adapter a definition may name*, not a network boundary and not real integrations.
 - **The repository itself.** This repo does not enforce the trusted/untrusted split. Anyone who can push can edit `platform/`, and the CI workflow here is illustrative — a workflow file cannot protect a branch it lives on.
 - **Arbitrary server code.** The supported authoring model is manifests. If someone writes server code instead, none of the above applies to it, and no test suite in an editable repository makes such code safe.
-- **Automated checks.** They demonstrate that the boundary holds for the cases written down. They say nothing about whether a refund *should* have been approved.
+- **Automated checks.** They demonstrate that the boundary holds for the cases written down. They say nothing about whether a refund *should* have been approved. The Activity view shows the *last recorded* run and the source revision it was recorded against, with a stale flag when the checkout has moved on — a staleness signal, not an attestation that the run happened.
+
+**Promotion across two stores.** Released content is written first to an immutable content-addressed file (`<appId>.<digest>.app.json`), then the active pointer and the promotion audit event are committed together in one SQLite transaction. This is safe publication, not cross-store atomicity: a failed write leaves the previous release untouched, and a failed commit leaves an orphan file nothing points at.
 
 ## 3. Required in a real deployment
 

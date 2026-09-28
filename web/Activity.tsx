@@ -1,22 +1,38 @@
 import { useEffect, useState } from "react";
-import { api, formatTime, type AssuranceRun, type DecisionEvent, type PlatformEvent } from "./api";
+import {
+  ApiError,
+  api,
+  formatTime,
+  type AssuranceRun,
+  type DecisionEvent,
+  type PlatformEvent,
+  type RevisionBinding,
+} from "./api";
 
 export function Activity() {
   const [platform, setPlatform] = useState<PlatformEvent[]>([]);
   const [decisions, setDecisions] = useState<DecisionEvent[]>([]);
+  const [oversightError, setOversightError] = useState<string | null>(null);
   const [assurance, setAssurance] = useState<{
     run: AssuranceRun | null;
     error: string | null;
+    revision: RevisionBinding;
     command: string;
     invariants: Array<{ workflow: string; control: string }>;
     productionGaps: string[];
   } | null>(null);
 
   useEffect(() => {
-    void api.activity().then((res) => {
-      setPlatform(res.platform);
-      setDecisions(res.decisions);
-    });
+    void api
+      .activity()
+      .then((res) => {
+        setPlatform(res.platform);
+        setDecisions(res.decisions);
+        setOversightError(null);
+      })
+      .catch((err: unknown) => {
+        setOversightError(err instanceof ApiError ? err.message : "Activity could not be loaded.");
+      });
     void api.assurance().then(setAssurance);
   }, []);
 
@@ -32,6 +48,8 @@ export function Activity() {
       </header>
 
       <div className="activity">
+        {oversightError && <p className="notice denied">{oversightError}</p>}
+
         <section>
           <h2>Platform events</h2>
           <table className="records">
@@ -101,6 +119,19 @@ export function Activity() {
                 {assurance.run.startedAt ? formatTime(assurance.run.startedAt) : "unknown"} · recorded{" "}
                 {formatTime(assurance.run.recordedAt)}
               </p>
+              <p className={assurance.revision.stale ? "notice denied" : "notice muted-notice"}>
+                Recorded against{" "}
+                <code>{assurance.revision.recordedFor?.slice(0, 12) ?? "an unrecorded revision"}</code>
+                {assurance.revision.uncommittedChangesWhenRecorded
+                  ? " with uncommitted changes in the tree"
+                  : ""}
+                . This checkout is at <code>{assurance.revision.current?.slice(0, 12) ?? "unknown"}</code>.{" "}
+                {assurance.revision.stale
+                  ? "The source has moved since the run, so these results may not describe the code running now."
+                  : assurance.revision.stale === false
+                    ? "Same revision, so the results describe this code."
+                    : "Revision could not be determined."}
+              </p>
               {assurance.run.files.map((f) => (
                 <details key={f.file}>
                   <summary>
@@ -119,7 +150,8 @@ export function Activity() {
           )}
           <p className="muted small">
             This view shows whatever <code>{assurance?.command ?? "npm run assure"}</code> last wrote to
-            evidence/test-results.json. It is not a hard-coded status, and a failing run is displayed as failing.
+            evidence/test-results.json. It is not a hard-coded status, a failing run is displayed as failing, and the
+            revision binding is a staleness signal rather than proof that the run happened.
           </p>
         </section>
 

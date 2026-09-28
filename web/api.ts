@@ -98,7 +98,8 @@ export interface RecordSummary {
 }
 
 export interface RecordDetail extends RecordSummary {
-  events: DecisionEvent[];
+  /** Present only when the app definition requested `audit.read`. */
+  events?: DecisionEvent[];
   payment?: { id: string; reference: string; amount_cents: number; currency: string; customer_label: string };
   remaining_refundable_cents?: number;
 }
@@ -120,6 +121,14 @@ export interface AssuranceRun {
   passed: number;
   failed: number;
   files: Array<{ file: string; status: string; tests: Array<{ title: string; status: string; failure?: string }> }>;
+}
+
+export interface RevisionBinding {
+  recordedFor: string | null;
+  current: string | null;
+  uncommittedChangesWhenRecorded: boolean | null;
+  stale: boolean | null;
+  note: string;
 }
 
 export class ApiError extends Error {
@@ -174,6 +183,7 @@ export const api = {
     call<{
       run: AssuranceRun | null;
       error: string | null;
+      revision: RevisionBinding;
       command: string;
       invariants: Array<{ workflow: string; control: string }>;
       productionGaps: string[];
@@ -196,7 +206,7 @@ export const api = {
       body: JSON.stringify({ definition }),
     }),
 
-  payments: () => call<{ payments: Payment[] }>("/api/payments"),
+  payments: (appId: string) => call<{ payments: Payment[] }>(`/api/apps/${appId}/payments`),
   records: (appId: string, params: { status: string; q: string }) =>
     call<{ records: RecordSummary[] }>(`/api/apps/${appId}/records?${qs(params)}`),
   record: (appId: string, id: string) => call<{ record: RecordDetail }>(`/api/apps/${appId}/records/${id}`),

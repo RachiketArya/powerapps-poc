@@ -35,8 +35,9 @@ The decision kernel (`platform/kernel/decision-service.ts`), the two workflow do
   │        │               markup / secret / capability check │
   │        ▼                                                  │
   │  manifest/store.ts     promotion (platform-admin only),   │
-  │        │               version + digest, atomic catalog   │
-  │        │               write + audit, re-validation on    │
+  │        │               immutable content file, then an    │
+  │        │               atomic SQLite pointer + audit      │
+  │        │               commit; re-validation on           │
   │        │               every load  ──► quarantine         │
   │        ▼                                                  │
   │  registry/index.ts     workflows, approved connectors,    │

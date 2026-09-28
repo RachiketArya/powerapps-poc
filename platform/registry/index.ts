@@ -58,7 +58,7 @@ export const APPROVED_CONNECTORS = [
   },
 ] as const;
 
-export const WORKFLOWS: Record<string, WorkflowSpec> = {
+const WORKFLOW_TABLE: Record<string, WorkflowSpec> = {
   refund_review: {
     key: "refund_review",
     title: "Refund review",
@@ -125,6 +125,28 @@ export const WORKFLOWS: Record<string, WorkflowSpec> = {
   },
 };
 
+/**
+ * Registered workflows, in a null-prototype map. A definition's `workflow`
+ * string is untrusted input: `toString`, `constructor` and `__proto__` must
+ * miss here rather than resolving to an inherited Object member, so every
+ * lookup goes through {@link getWorkflow} and never through property access
+ * on a plain object.
+ */
+export const WORKFLOWS: Readonly<Record<string, WorkflowSpec>> = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, WorkflowSpec>, WORKFLOW_TABLE),
+);
+
+const WORKFLOW_MAP = new Map<string, WorkflowSpec>(Object.entries(WORKFLOW_TABLE));
+
+/** The only supported way to resolve a workflow key. Returns undefined for anything unregistered. */
+export function getWorkflow(key: unknown): WorkflowSpec | undefined {
+  return typeof key === "string" ? WORKFLOW_MAP.get(key) : undefined;
+}
+
+export function allWorkflows(): WorkflowSpec[] {
+  return [...WORKFLOW_MAP.values()];
+}
+
 export function workflowKeys(): string[] {
-  return Object.keys(WORKFLOWS);
+  return [...WORKFLOW_MAP.keys()];
 }

@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "assure": "vitest run --reporter=json --outputFile=evidence/test-results.json"
+    "assure": "node platform/assurance/record-revision.mjs && vitest run --reporter=json --outputFile=evidence/test-results.json"
   },
   "dependencies": {
     "better-sqlite3": "11.10.0",

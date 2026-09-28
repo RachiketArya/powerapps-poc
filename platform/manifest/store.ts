@@ -1,12 +1,21 @@
 /**
  * Promotion and load path for app definitions — platform-owned, trusted code.
  *
- * Promotion is the only way a definition reaches the catalog, it requires the
- * platform-admin role, and it writes the definition and its audit event in one
- * transaction. Loading is defensive: the file on disk is re-parsed,
- * digest-checked and re-validated every time, so editing it by hand (or
- * bypassing the workshop entirely) quarantines the app instead of activating
- * unchecked content.
+ * Promotion is the only way a definition reaches the catalog and it requires
+ * the platform-admin role.
+ *
+ * Two stores are involved and only one of them can be transactional, so the
+ * order matters. Released content is written first, to an immutable
+ * content-addressed file (`<appId>.<digest>.app.json`) that no later promotion
+ * ever overwrites. The authoritative pointer — which version is active, its
+ * digest, its file — and the audit event are then written together in one
+ * SQLite transaction. A failed file write leaves the catalog and the previous
+ * released file untouched; a failed commit leaves an orphan file that nothing
+ * points at. Neither can destroy the currently active release.
+ *
+ * Loading is defensive: the file on disk is re-parsed, digest-checked and
+ * re-validated every time, so editing it by hand (or bypassing the workshop
+ * entirely) quarantines the app instead of activating unchecked content.
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -109,16 +118,47 @@ export function promoteDefinition(db: Db, actor: Actor, input: unknown): Catalog
 
   const definition = outcome.definition;
   const digest = outcome.digest;
-  const previous = db
-    .prepare(`SELECT MAX(version) AS v FROM app_definitions WHERE app_id = ?`)
-    .get(definition.appId) as { v: number | null };
-  const version = (previous.v ?? 0) + 1;
   const dir = activeAppsDir();
-  const file = path.join(dir, `${definition.appId}.app.json`);
+  // Content-addressed and therefore immutable: the same content always lands
+  // on the same path, and different content never replaces a released file.
+  const file = path.join(dir, `${definition.appId}.${digest}.app.json`);
   const promotedAt = new Date().toISOString();
-  const body = `${JSON.stringify(definition, null, 2)}\n`;
 
+  // Step 1 — content. A failure here throws before anything is committed, so
+  // the catalog still points at the previous release and its file is intact.
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(definition, null, 2)}\n`, "utf8");
+    fs.renameSync(`${file}.tmp`, file);
+  } catch (err) {
+    try {
+      fs.rmSync(`${file}.tmp`, { force: true });
+    } catch {
+      /* best effort */
+    }
+    recordEvent(db, {
+      type: "app.promote",
+      appId: definition.appId,
+      digest,
+      actor,
+      outcome: "denied",
+      detail: { reason: "release_write_failed", error: String(err) },
+    });
+    throw new PromotionError(
+      "release_write_failed",
+      "The released definition could not be written, so nothing was activated. The previous release is unchanged.",
+      500,
+    );
+  }
+
+  // Step 2 — pointer plus audit, atomically. The version is chosen inside the
+  // transaction so two concurrent promotions cannot pick the same number.
+  let version = 0;
   const run = db.transaction(() => {
+    const previous = db
+      .prepare(`SELECT MAX(version) AS v FROM app_definitions WHERE app_id = ?`)
+      .get(definition.appId) as { v: number | null };
+    version = (previous.v ?? 0) + 1;
     db.prepare(`UPDATE app_definitions SET active = 0 WHERE app_id = ?`).run(definition.appId);
     db.prepare(
       `INSERT INTO app_definitions (app_id, version, digest, definition_json, source_path, active, promoted_by, promoted_at)
@@ -133,12 +173,10 @@ export function promoteDefinition(db: Db, actor: Actor, input: unknown): Catalog
       outcome: "allowed",
       detail: { workflow: definition.workflow, capabilities: definition.capabilities },
     });
-    // Written inside the transaction so a failed disk write rolls the catalog
-    // row and its audit event back together.
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(file, body, "utf8");
   });
-  run();
+  // `immediate` takes the write lock up front, so the version read and the
+  // insert cannot interleave with another promotion of the same app.
+  run.immediate();
 
   return {
     appId: definition.appId,

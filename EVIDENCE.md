@@ -15,7 +15,8 @@ My environment clock and the reviewer's observer clock are offset by roughly nin
 | Kernel port, registry, validator, promotion store, seeded catalog | 12:33 → 12:46 | 13 min |
 | Adversarial governance suite green (68 tests) | 12:47 | 14 min |
 | Catalog / workshop / activity UI, typecheck and build green | 12:48 | 15 min |
-| Milestone pushed for review | see commit below | — |
+| Milestone pushed for review (`e9af6e4`) | 12:49 | 16 min |
+| Review repairs (four defects found by independent review of `e9af6e4`) | 12:50 → 12:57 | 24 min |
 
 ## Commands and results
 
@@ -29,9 +30,13 @@ found 0 vulnerabilities
 $ npx tsc -p tsconfig.json --noEmit
 (clean, no output)
 
-$ npx vitest run
+$ npx vitest run            # at the e9af6e4 milestone
  Test Files  3 passed (3)
       Tests  71 passed (71)
+
+$ npm run assure            # after the review repairs
+ Test Files  4 passed (4)
+      Tests  87 passed (87)
 
 $ npm run build
 ✓ 19 modules transformed.
@@ -44,7 +49,19 @@ $ npm audit
 found 0 vulnerabilities
 ```
 
-`npm run assure` writes `evidence/test-results.json`; the Activity view renders whatever that file contains, including failures, and says so when the file is absent.
+`npm run assure` records the source revision to `evidence/assurance-meta.json` and then writes `evidence/test-results.json`; the Activity view renders whatever those files contain — including failures, an absent run, and a stale flag when the checkout has moved past the revision the run was recorded against. The revision binding is a staleness signal, not proof that the run happened.
+
+## Review repairs (found by independent review of `e9af6e4`, not initially passed)
+
+All four were reproduced before fixing and each has a regression test in `platform/manifest/repairs.test.ts` (16 new cases, 71 → 87).
+
+| Defect | Repair | Test |
+| --- | --- | --- |
+| `audit.read` declared but never enforced — record/decision responses carried `events` with actors, reasons and idempotency keys | Responses are projected: no `audit.read`, no `events`. History moved behind `GET /api/apps/:appId/records/:id/audit`, gated on `audit.read` | "withholds record history…", "withholds history from a decision response…", "returns history to an app that did request audit.read" |
+| `/api/activity` returned every decision event to any session; `/api/payments` was unscoped | Cross-app activity is `platform_admin` oversight only; payments are `GET /api/apps/:appId/payments` requiring `record.create` on a refund workflow. UI updated. Documented that capability narrowing is a per-app surface control, not user data isolation | "does not expose cross-app activity to a non-admin session", "has no unscoped payments route…" |
+| Promotion was not filesystem/SQLite atomic: a failed write destroyed the active file and left the app quarantined | Immutable content-addressed release files (`<appId>.<digest>.app.json`) written before the transaction; the SQLite pointer + audit commit together and the version is chosen inside an immediate transaction. A failed write changes nothing; a failed commit leaves a harmless orphan | "leaves the active release intact when the content write fails" (forced partial write + throw), "…when the catalog commit fails", "gives each release its own immutable file" |
+| `workflow: "toString"` resolved through the prototype and 500ed | Registry lookup is a `Map` over a null-prototype table (`getWorkflow`), used by the validator, the server and the load path | "refuses workflow '<key>'" for `toString`, `constructor`, `__proto__`, `hasOwnProperty`; plus a persisted invalid definition whose digest was recomputed to match, proving validation is independent of the digest check |
+| Assurance output had no source-revision binding | `npm run assure` records HEAD and dirty state; `/api/assurance` returns recorded vs current revision and a stale flag, rendered in Activity | "reports the recorded revision, the current revision and whether it is stale" |
 
 ## Test coverage by boundary
 

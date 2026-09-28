@@ -319,8 +319,14 @@ function DetailPanel({
       )}
 
       <h3>Audit trail</h3>
+      {!record.events && (
+        <p className="muted small">
+          This app definition does not request the audit.read capability, so the runtime does not return record history
+          to it.
+        </p>
+      )}
       <ol className="timeline">
-        {record.events.map((e) => (
+        {(record.events ?? []).map((e) => (
           <li key={e.id}>
             <span className="when">{formatTime(e.created_at)}</span>
             <span>
@@ -351,11 +357,11 @@ function CreateForm({
 
   useEffect(() => {
     if (!isRefund) return;
-    void api.payments().then((res) => {
+    void api.payments(appId).then((res) => {
       setPayments(res.payments);
       setForm((f) => ({ ...f, paymentId: f.paymentId ?? res.payments[0]?.id ?? "" }));
     });
-  }, [isRefund]);
+  }, [isRefund, appId]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 

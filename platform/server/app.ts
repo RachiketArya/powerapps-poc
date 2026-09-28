@@ -7,6 +7,7 @@
  * nothing else: the business rules below come from the registry and the
  * shared decision kernel.
  */
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -30,7 +31,7 @@ import {
   getVendorBankChange,
   listVendorBankChanges,
 } from "../registry/vendor-bank-change-review.js";
-import { APPROVED_CONNECTORS, WORKFLOWS } from "../registry/index.js";
+import { APPROVED_CONNECTORS, allWorkflows, getWorkflow } from "../registry/index.js";
 import { validateDefinition } from "../manifest/schema.js";
 import {
   PromotionError,
@@ -131,7 +132,7 @@ export function createApp(db: Db) {
   app.get("/api/platform/registry", (_req, res) => {
     res.json({
       connectors: APPROVED_CONNECTORS,
-      workflows: Object.values(WORKFLOWS).map((w) => ({
+      workflows: allWorkflows().map((w) => ({
         key: w.key,
         title: w.title,
         entityType: w.entityType,
@@ -157,7 +158,17 @@ export function createApp(db: Db) {
     return res.json({ app: publicEntry(entry) });
   });
 
-  app.get("/api/activity", (_req, res) => {
+  // Platform oversight. This is deliberately cross-app, so it is restricted to
+  // the platform admin rather than offered to every session: an app's capability
+  // set narrows that app's surface, it is not per-user data isolation.
+  app.get("/api/activity", (req, res) => {
+    if (req.actor!.role !== "platform_admin") {
+      return res.status(403).json({
+        error: "forbidden_role",
+        message:
+          "Cross-app activity is platform oversight and is limited to the platform admin. Per-record history is available inside an app that requests 'audit.read'.",
+      });
+    }
     const platform = platformEvents(db, 60);
     const decisions = db
       .prepare(
@@ -167,7 +178,7 @@ export function createApp(db: Db) {
           ORDER BY e.created_at DESC, e.rowid DESC LIMIT 60`,
       )
       .all();
-    res.json({ platform, decisions });
+    return res.json({ platform, decisions });
   });
 
   // ---------------------------------------------------------------- workshop
@@ -227,10 +238,9 @@ export function createApp(db: Db) {
     res.json({
       run,
       error,
+      revision: revisionBinding(),
       command: "npm run assure",
-      invariants: Object.values(WORKFLOWS).flatMap((w) =>
-        w.nonNegotiableControls.map((c) => ({ workflow: w.key, control: c })),
-      ),
+      invariants: allWorkflows().flatMap((w) => w.nonNegotiableControls.map((c) => ({ workflow: w.key, control: c }))),
       productionGaps: PRODUCTION_GAPS,
     });
   });
@@ -261,14 +271,38 @@ export function createApp(db: Db) {
   }
 
   function entityOf(req: Request) {
-    return WORKFLOWS[req.app_entry!.definition!.workflow]!.entityType;
+    return getWorkflow(req.app_entry!.definition!.workflow)!.entityType;
   }
 
-  app.get("/api/payments", (_req, res) => {
+  /**
+   * Record history is only returned to an app that requested `audit.read`.
+   * Capability narrowing is enforced on the payload, not by hiding a panel.
+   */
+  function project(req: Request, record: Record<string, unknown> | undefined) {
+    if (!record) return record;
+    if (req.app_entry!.definition!.capabilities.includes("audit.read")) return record;
+    const { events: _events, ...rest } = record as { events?: unknown };
+    return rest;
+  }
+
+  // Payment options exist for the refund workflow's creation form only, and
+  // only for an app that may create records.
+  app.get("/api/apps/:appId/payments", withApp("record.create"), (req, res) => {
+    if (entityOf(req) !== "refund_request") {
+      return res.status(404).json({ error: "not_found", message: "This workflow has no payment options" });
+    }
     const payments = db.prepare(`SELECT * FROM payments ORDER BY captured_at DESC`).all() as Array<{ id: string }>;
-    res.json({
+    return res.json({
       payments: payments.map((p) => ({ ...p, remaining_refundable_cents: remainingRefundableCents(db, p.id) })),
     });
+  });
+
+  app.get("/api/apps/:appId/records/:id/audit", withApp("audit.read"), (req, res) => {
+    const record = (
+      entityOf(req) === "refund_request" ? getRefund(db, req.params.id!) : getVendorBankChange(db, req.params.id!)
+    ) as { events?: unknown } | undefined;
+    if (!record) return res.status(404).json({ error: "not_found", message: "Record not found" });
+    return res.json({ events: record.events ?? [] });
   });
 
   app.get("/api/apps/:appId/records", withApp("queue.read"), (req, res) => {
@@ -283,7 +317,7 @@ export function createApp(db: Db) {
     const record =
       entityOf(req) === "refund_request" ? getRefund(db, req.params.id!) : getVendorBankChange(db, req.params.id!);
     if (!record) return res.status(404).json({ error: "not_found", message: "Record not found" });
-    return res.json({ record });
+    return res.json({ record: project(req, record as Record<string, unknown>) });
   });
 
   const createRefundSchema = z.object({
@@ -306,12 +340,14 @@ export function createApp(db: Db) {
         const parsed = createRefundSchema.safeParse(req.body);
         if (!parsed.success) return res.status(400).json(badBody(parsed.error));
         const created = createRefundRequest(db, req.actor!, parsed.data);
-        return res.status(201).json({ record: getRefund(db, created.id) });
+        return res.status(201).json({ record: project(req, getRefund(db, created.id) as Record<string, unknown>) });
       }
       const parsed = createVendorSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json(badBody(parsed.error));
       const created = createVendorBankChange(db, req.actor!, parsed.data);
-      return res.status(201).json({ record: getVendorBankChange(db, created.id) });
+      return res
+        .status(201)
+        .json({ record: project(req, getVendorBankChange(db, created.id) as Record<string, unknown>) });
     } catch (err) {
       return next(err);
     }
@@ -343,7 +379,12 @@ export function createApp(db: Db) {
           : decideVendorBankChange(db, req.actor!, args);
         const approved = result.record.status === "approved_for_execution";
         return res.json({
-          record: refundWorkflow ? getRefund(db, result.record.id) : getVendorBankChange(db, result.record.id),
+          record: project(
+            req,
+            (refundWorkflow
+              ? getRefund(db, result.record.id)
+              : getVendorBankChange(db, result.record.id)) as Record<string, unknown>,
+          ),
           duplicate: result.duplicate,
           note: approved
             ? refundWorkflow
@@ -381,7 +422,53 @@ export const PRODUCTION_GAPS = [
   "This repository does not enforce the trusted/untrusted split. Branch protection, CODEOWNERS review on platform/, a separately controlled deploy identity and network egress policy are required for that.",
   "Definitions cannot cause network calls, but authoring arbitrary server code is outside the supported model — it is not made safe by these tests.",
   "Automated checks demonstrate the boundary, not business correctness.",
+  "Capability narrowing is a per-app surface control, not user data isolation. Two apps on the same workflow read the same records, so a user who may use a broader app still reaches that data through it. Per-app or per-tenant record entitlements are not implemented.",
+  "Assurance results are the last recorded run, bound to the source revision it was recorded against. They are a staleness signal, not an attestation that the run happened.",
 ];
+
+interface RevisionBinding {
+  recordedFor: string | null;
+  current: string | null;
+  uncommittedChangesWhenRecorded: boolean | null;
+  stale: boolean | null;
+  note: string;
+}
+
+/**
+ * Binds the recorded run to a source revision. `stale` is true when the
+ * checkout has moved on since the run was recorded, so the view can say the
+ * results may not describe the code being served.
+ */
+function revisionBinding(): RevisionBinding {
+  const metaFile = path.join(repoRoot(), "evidence", "assurance-meta.json");
+  let recordedFor: string | null = null;
+  let uncommittedChangesWhenRecorded: boolean | null = null;
+  if (fs.existsSync(metaFile)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaFile, "utf8")) as {
+        revision?: string | null;
+        uncommittedChanges?: boolean | null;
+      };
+      recordedFor = meta.revision ?? null;
+      uncommittedChangesWhenRecorded = meta.uncommittedChanges ?? null;
+    } catch {
+      /* treated as an unbound run below */
+    }
+  }
+  let current: string | null = null;
+  try {
+    current = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot(), encoding: "utf8" }).trim();
+  } catch {
+    current = null;
+  }
+  return {
+    recordedFor,
+    current,
+    uncommittedChangesWhenRecorded,
+    stale: recordedFor && current ? recordedFor !== current : null,
+    note: "Last recorded run. It describes the revision it was recorded against, which may not be the code running now.",
+  };
+}
 
 interface VitestJson {
   startTime?: number;
@@ -440,7 +527,7 @@ function publicEntry(entry: CatalogEntry) {
     promotedAt: entry.promotedAt,
     sourcePath: entry.sourcePath,
     definition: entry.definition,
-    workflow: entry.definition ? WORKFLOWS[entry.definition.workflow] ?? null : null,
+    workflow: entry.definition ? getWorkflow(entry.definition.workflow) ?? null : null,
   };
 }
 

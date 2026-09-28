@@ -391,7 +391,8 @@ describe("catalog and activity surfaces", () => {
       .set("Cookie", makerCookie)
       .send({ definition: { ...example("refund-review.app.json"), appId: "denied-app" } });
 
-    const res = await request(app).get("/api/activity").set("Cookie", makerCookie);
+    // Cross-app activity is platform oversight, so it is read as the admin.
+    const res = await request(app).get("/api/activity").set("Cookie", await login(ADMIN));
     const outcomes = res.body.platform.map((e: { outcome: string }) => e.outcome);
     expect(outcomes).toContain("denied");
     expect(outcomes).toContain("allowed");

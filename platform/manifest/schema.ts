@@ -8,7 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { APPROVED_CONNECTORS, WORKFLOWS, type Capability } from "../registry/index.js";
+import { APPROVED_CONNECTORS, getWorkflow, workflowKeys, type Capability } from "../registry/index.js";
 
 export interface Violation {
   /** Stable machine code, e.g. `unknown_field`. */
@@ -193,14 +193,16 @@ export function validateDefinition(input: unknown): ValidationOutcome {
   }
 
   const def = parsed.data;
-  const workflow = WORKFLOWS[def.workflow];
+  // Own-property lookup only: `toString`, `constructor` and `__proto__` are
+  // unregistered workflow names, not inherited Object members.
+  const workflow = getWorkflow(def.workflow);
   if (!workflow) {
     violations.push({
       code: "unknown_workflow",
       path: "workflow",
       message: `'${def.workflow}' is not a registered workflow`,
       policy: "workflows are implemented in the platform registry, not by a definition",
-      nextAction: `Choose one of: ${Object.keys(WORKFLOWS).join(", ")}.`,
+      nextAction: `Choose one of: ${workflowKeys().join(", ")}.`,
     });
     return { ok: false, violations };
   }
