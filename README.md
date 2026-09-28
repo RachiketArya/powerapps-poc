@@ -68,6 +68,7 @@ A definition can choose labels, which exposed fields appear in the list and deta
 Requires Node `^22.12` (Vite 8 floor; better-sqlite3 is built for Node 22 here). `.nvmrc` pins `22.12`.
 
 ```bash
+nvm install        # install the version in .nvmrc
 nvm use            # 22.12
 npm ci
 npm run dev        # API on 127.0.0.1:8787, UI on 127.0.0.1:5173
@@ -76,9 +77,9 @@ npm run dev        # API on 127.0.0.1:8787, UI on 127.0.0.1:5173
 The database is created and seeded on first start (`data/control-room.sqlite`), which also promotes the two definitions in `apps/` into the local catalog as v1.
 
 ```bash
-npm run seed       # seed without starting the server
-npm run reset      # delete the database and re-seed
-npm test           # 68 tests
+npm run seed       # restore synthetic fixtures; reload the browser afterward
+npm run reset      # stop the dev server first; deletes and re-creates the demo DB
+npm test           # run the application and boundary tests
 npm run typecheck
 npm run build
 npm run assure     # writes evidence/test-results.json, shown in the Activity view
@@ -110,3 +111,17 @@ The selector is not authentication: anyone reaching this server can assume any i
 See [SECURITY_BOUNDARY.md](SECURITY_BOUNDARY.md) for what is enforced, what is trusted and what a real deployment would need (branch protection, CODEOWNERS review on `platform/`, a separately controlled CI/deploy identity, network egress policy). [EVIDENCE.md](EVIDENCE.md) records the actual commands, results and timings.
 
 Short version: identity is mock, connectors are local readers, the digest identifies content rather than authenticating an author, the audit trail is append-only through the API but not tamper-proof against whoever owns the database, and the CI workflow in `.github/workflows/` is illustrative — it does not enforce anything until repository rulesets require it.
+
+## Case-study deliverables
+
+Start with [the solution and build-versus-buy recommendation](evaluation/CASE-STUDY.md). It explains the controlled authoring model, what Power Apps provides, where savings might arise and the conditions for a pilot.
+
+- [Key decisions: one-page PDF](evaluation/Control%20Room%20-%20Key%20Decisions.pdf)
+- [Loom narration and demo steps](evaluation/LOOM-SCRIPT.md)
+- [Independent review and repaired defects](evaluation/INDEPENDENT-REVIEW.md)
+- [Pilot scorecard](evaluation/PILOT-SCORECARD.md) and [ownership contract](evaluation/AUTHORING-CONTRACT.md)
+- [Delivery, provenance and verification record](evaluation/DELIVERY.md)
+
+Devin Cloud authored the application and its tests. Codex scoped and researched the case, orchestrated the build, performed independent review and prepared the evaluation materials. The independent probes live in evaluation/ and run with `node --import tsx evaluation/independent-probes.mjs`.
+
+The Loom script is ready for Rachiket to review and record in his own voice. No assignment submission has been performed.
