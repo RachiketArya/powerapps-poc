@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "name": "empty actor and record scopes never authorize",
+      "pass": false,
+      "detail": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    },
+    {
+      "name": "missing actor and record scopes never authorize",
+      "pass": false,
+      "detail": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    },
+    {
+      "name": "blank scope cannot create a vendor change",
+      "pass": false,
+      "detail": "expected 403/404, got 201"
+    },
+    {
+      "name": "oversight-created refund cannot disclose a foreign payment to US users",
+      "pass": false,
+      "detail": "US user received 200: {\"id\":\"rr_2c81e0e3\",\"payment_id\":\"pay_7001\",\"amount_cents\":100,\"reason\":\"Synthetic oversight creation test\",\"status\":\"pending\",\"version\":1,\"requested_by\":\"u_adm_rhea\",\"requester_name\":\"Rhea Vanterpool (Platform admin)\",\"created_at\":\"2026-09-28T18:01:25.593Z\",\"decided_by\":null,\"decider_name\":null,\"decided_at\":null,\"decision_reason\":null,\"scope\":\"us-ops\",\"payment_reference\":\"SYN-PAY-7001\",\"customer_label\":\"Acct 5190 · Synthetic customer G (EMEA)\",\"payment_amount_cents\":240000,\"payment_currency\":\"EUR\",\"payment_captured_at\":\"2026-09-13T11:20:00.000Z\",\"remaining_refundable_cents\":240000,\"events\":[{\"id\":\"fd22d70c-c01a-4e81-9759-91fe40c82e5b\",\"entity_type\":\"refund_request\",\"entity_id\":\"rr_2c81e0e3\",\"action\":\"create\",\"actor_id\":\"u_adm_rhea\",\"actor_role\":\"platform_admin\",\"reason\":\"Synthetic oversight creation test\",\"from_status\":null,\"to_status\":\"pending\",\"from_version\":null,\"to_version\":1,\"idempotency_key\":\"b82efb2c-59ea-467e-86cf-9fea2b2cdf86\",\"created_at\":\"2026-09-28T18:01:25.593Z\",\"detail_json\":\"{\\\"amount_cents\\\":100,\\\"payment_id\\\":\\\"pay_7001\\\"}\",\"actor_name\":\"Rhea Vanterpool (Platform admin)\"}]}\n\n200 !== 404\n"
+    },
+    {
+      "name": "foreign payment validation reveals no balance for a huge amount",
+      "pass": true
+    },
+    {
+      "name": "vendor verification reason cannot meet length floor using whitespace padding",
+      "pass": false,
+      "detail": "expected normalized reason rejection, got 200\n\n200 !== 400\n"
+    },
+    {
+      "name": "changed role invalidates an idempotent replay",
+      "pass": true
+    }
+  ],
+  "passed": 2,
+  "total": 7
+}

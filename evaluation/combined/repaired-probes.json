@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "name": "empty actor and record scopes never authorize",
+      "pass": true
+    },
+    {
+      "name": "missing actor and record scopes never authorize",
+      "pass": true
+    },
+    {
+      "name": "blank scope cannot create a vendor change",
+      "pass": true
+    },
+    {
+      "name": "oversight-created refund cannot disclose a foreign payment to US users",
+      "pass": true
+    },
+    {
+      "name": "foreign payment validation reveals no balance for a huge amount",
+      "pass": true
+    },
+    {
+      "name": "vendor verification reason cannot meet length floor using whitespace padding",
+      "pass": true
+    },
+    {
+      "name": "changed role invalidates an idempotent replay",
+      "pass": true
+    }
+  ],
+  "passed": 7,
+  "total": 7
+}

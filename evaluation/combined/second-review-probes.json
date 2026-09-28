@@ -1,0 +1,49 @@
+{
+  "results": [
+    {
+      "name": "empty actor and record scopes never authorize",
+      "pass": true
+    },
+    {
+      "name": "missing actor and record scopes never authorize",
+      "pass": true
+    },
+    {
+      "name": "blank scope cannot create a vendor change",
+      "pass": true
+    },
+    {
+      "name": "blank scopes fail closed on refund_requests list",
+      "pass": false,
+      "detail": "empty-scope user received malformed refund_requests records\n+ actual - expected\n\n+ [\n+   {\n+     amount_cents: 150000,\n+     created_at: '2026-09-15T09:12:00.000Z',\n+     customer_label: 'Acct 9925 · Synthetic customer B',\n+     decided_at: null,\n+     decided_by: null,\n+     decider_name: null,\n+     decision_reason: null,\n+     id: 'rr_2002',\n+     payment_amount_cents: 498000,\n+     payment_captured_at: '2026-09-04T16:02:00.000Z',\n+     payment_currency: 'USD',\n+     payment_id: 'pay_1002',\n+     payment_reference: 'SYN-PAY-1002',\n+     reason: 'Service outage credit, tier 2 approved scope',\n+     requested_by: 'u_req_nadia',\n+     requester_name: 'Nadia Okoro (Support Ops)',\n+     scope: '',\n+     status: 'pending',\n+     version: 1\n+   }\n+ ]\n- []\n"
+    },
+    {
+      "name": "blank scopes fail closed on vendor_bank_changes list",
+      "pass": false,
+      "detail": "empty-scope user received malformed vendor_bank_changes records\n+ actual - expected\n\n+ [\n+   {\n+     country: 'US',\n+     created_at: '2026-09-15T09:40:00.000Z',\n+     current_masked_ref: '••••-••••-4417',\n+     decided_at: null,\n+     decided_by: null,\n+     decider_name: null,\n+     decision_reason: null,\n+     id: 'vbc_3001',\n+     new_masked_ref: '••••-••••-8890',\n+     reason: 'Bank merger; new remittance details confirmed by callback',\n+     requested_by: 'u_req_nadia',\n+     requester_name: 'Nadia Okoro (Support Ops)',\n+     scope: '',\n+     status: 'pending',\n+     vendor_name: 'Northwind Logistics (synthetic)',\n+     verification_channel: 'callback_to_known_number',\n+     version: 1\n+   }\n+ ]\n- []\n"
+    },
+    {
+      "name": "blank scopes fail closed on payments list",
+      "pass": false,
+      "detail": "empty-scope user received malformed payments records\n+ actual - expected\n\n+ [\n+   {\n+     amount_cents: 498000,\n+     captured_at: '2026-09-04T16:02:00.000Z',\n+     currency: 'USD',\n+     customer_label: 'Acct 9925 · Synthetic customer B',\n+     id: 'pay_1002',\n+     reference: 'SYN-PAY-1002',\n+     remaining_refundable_cents: 498000,\n+     scope: ''\n+   }\n+ ]\n- []\n"
+    },
+    {
+      "name": "oversight-created refund cannot disclose a foreign payment to US users",
+      "pass": true
+    },
+    {
+      "name": "foreign payment validation reveals no balance for a huge amount",
+      "pass": true
+    },
+    {
+      "name": "vendor verification reason cannot meet length floor using whitespace padding",
+      "pass": true
+    },
+    {
+      "name": "changed role invalidates an idempotent replay",
+      "pass": true
+    }
+  ],
+  "passed": 7,
+  "total": 10
+}

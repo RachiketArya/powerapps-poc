@@ -136,20 +136,20 @@ Nothing in the README or this file claims a browser check that has not happened.
 
 ## Phase 2 — paved-road portfolio (branch `codex/paved-road-portfolio`)
 
-Start ~18:52 local (17:50 UTC box clock); active implementation time only — waiting on the user's independent reviews ran in parallel and is not counted as implementation.
+Devin's final report gives approximately 17:52–18:17 UTC (25 minutes wall-clock) for this extension. No reliable active-versus-waiting or usage split was available. This supersedes the earlier start estimate and does not reset the assignment's cumulative timebox.
 
 ### Scope checkpoint `5afc9a9212d537a01f02964810b43612b326e9d1`
 
 Per-user resource scope: `scope` column on users, payments, `refund_requests` and `vendor_bank_changes` (`us-ops`, `emea-ops`, `*` oversight), resolved into the actor server-side. Lists filter by scope; detail, audit, decision and create return 404 for foreign-scope records so a guessed id discloses nothing; the scope check precedes the idempotent replay lookup so revoked access gets 404, not a cached result; creates refuse foreign payments before balance validation. `platform/registry/scope.test.ts` adds the negative API tests. The checkpoint suite was 101/101 green — with the independent-failure distinction below preserved.
 
-**Independent review of the checkpoint found three boundary bugs; all were repaired and regressed:**
+**Independent review of the checkpoint found three initial boundary bugs and an incomplete first repair; all were repaired and regressed:**
 
 | Defect on `5afc9a9` (green suite at the time) | Repair |
 | --- | --- |
-| `scopeAllows({scope:""}, "")` and `scopeAllows({}, undefined)` matched; an empty-scope user could also POST a valid vendor record and get 201 | `scopeAllows` fails closed on empty/missing scopes on either side, and both create paths refuse actors without a real team scope |
+| `scopeAllows({scope:""}, "")` and `scopeAllows({}, undefined)` matched; an empty-scope user could also POST a valid vendor record and get 201 | `scopeAllows` fails closed for ordinary scoped actors with empty/missing actor or record scopes, and both create paths refuse actors without a real team scope |
 | `*` oversight could POST a refund against an EMEA payment, and the record was stamped `us-ops`, exposing foreign payment detail to the US queue | `*` oversight can no longer create business records at all, and a created refund derives its scope from the authorized payment, never the caller |
 | Vendor approval reason `OK` + 25 spaces + `verified` passed the 20-char floor because the floor measured raw input while the kernel stored the normalized reason | Shared `assertReasonLength` (the phase's shared-maintenance change, reused by the kernel's 5-char floor and the vendor 20-char floor) measures the whitespace-normalized reason |
-| Blank-scope rows still matched a blank-scope actor on the list and payment-option paths (`WHERE scope = ?` alone), so a degraded record leaked to a degraded user | Empty actor scope now returns an empty result on refund/vendor lists and payment options outright; degraded blank-scope rows are invisible to everyone except `*` oversight reads that only show rows with a real scope match |
+| Blank-scope rows still matched a blank-scope actor on the list and payment-option paths (`WHERE scope = ?` alone), so a degraded record leaked to a degraded user | Empty actor scope now returns an empty result on refund/vendor lists and payment options outright; degraded blank-scope rows are invisible to everyone except the trusted `*` oversight read path |
 
 ### Module split and portfolio
 
@@ -163,7 +163,7 @@ Per-user resource scope: `scope` column on users, payments, `refund_requests` an
 - `npm test` — 111/111 (15 + 6 scope/boundary regressions)
 - `npm run build` — clean
 - `npm audit` — 0 vulnerabilities
-- Browser inspection on `83c758d` (recording attached): portfolio table (13 rows, 2 Runnable / 11 Planned), refund payment-ledger card with real values, vendor compare card + verification checklist with the inbound-email denial, Mira approving vbc_3001 with queue refresh, and the US↔EMEA identity switch clearing queue, detail and open create form. Two defects were caught and repaired during it:
+- Browser inspection on `83c758d` (recording attached): portfolio table (13 rows, 2 Runnable / 11 Planned), refund payment-ledger card with real values, vendor compare card + verification checklist with the inbound-email denial, Mira approving vbc_3001 with queue refresh, and the US↔EMEA identity switch clearing queue, detail and open create form. The initial targeted browser run reported six passes and one failure (EUR formatting); the follow-up verified its repair. Across independent and builder browser review, these three UI defects were repaired:
 
 | Defect | Repair |
 | --- | --- |

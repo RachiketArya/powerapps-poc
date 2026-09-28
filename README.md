@@ -1,6 +1,6 @@
 # Control Room
 
-A narrow proof that Ops can describe an internal review tool, have a coding agent write a **declarative app definition** for it, and have central platform controls stay enforced anyway.
+A local prototype of a **paved road for internal apps**: Devin builds workflow-specific interfaces and validated app definitions over a shared decision kernel, with proposed domain owners and server-side resource scopes.
 
 Two apps are built and running here — **refund review** and **vendor bank-change review** — and they share one trusted kernel. Everything is synthetic and local. No payment, banking, vendor or identity system is contacted, and nothing is deployed anywhere.
 
@@ -14,11 +14,11 @@ Two apps are built and running here — **refund review** and **vendor bank-chan
 | Local in-process "connectors" over synthetic SQLite data | Real integrations or a network isolation boundary |
 | Append-only audit written in the same transaction as the state change | Tamper-proof storage |
 | Adversarial tests of the governance boundary | Proof of business correctness |
-| Two apps plus a reusable foundation | Thirteen apps. Ten more queues are plausible; they are future work, not built |
+| Two apps plus a reusable foundation | Thirteen apps. The portfolio lists 13 proposed apps: two runnable and eleven planned |
 
 ## Provenance
 
-The decision kernel (`platform/kernel/decision-service.ts`), the two workflow domains and their test suites are ported from **Decision Desk**, the 26-minute prototype built earlier in the same evaluation by the same author: <https://github.com/RachiketArya/cognition-decision-desk> at commit `36dc774f30330b3d43e69caf53171793f56766e4`. This repository is therefore *not* an independent from-scratch build; it starts from that prototype and adds the governance layer (manifest schema, workflow registry, promotion store, catalog/workshop/activity surfaces). No other prior work was read or reused.
+The decision kernel (`platform/kernel/decision-service.ts`), the two workflow domains and their test suites are ported from **Decision Desk**, the 26-minute prototype built earlier in the same evaluation by the same author: <https://github.com/RachiketArya/cognition-decision-desk> at commit `36dc774f30330b3d43e69caf53171793f56766e4`. This repository is therefore *not* an independent from-scratch build; it starts from that prototype and adds the governance layer (manifest schema, workflow registry, promotion store, catalog/workshop/activity surfaces). The initial implementation was developed independently of Claude's planning materials. The later combined recommendation incorporates those materials with the user's explicit permission. Devin authored application changes; Codex prepared the combined analysis and independent review probes.
 
 ## Architecture
 
@@ -124,13 +124,16 @@ Short version: identity is mock, connectors are local readers, the digest identi
 
 ## Case-study deliverables
 
-Start with [the solution and build-versus-buy recommendation](evaluation/CASE-STUDY.md). It explains the controlled authoring model, what Power Apps provides, where savings might arise and the conditions for a pilot.
+Start with [the combined take-home package](evaluation/combined/README.md): **build, phased and gated**, with Power Apps code apps as the pilot fallback.
 
-- [Key decisions: one-page PDF](evaluation/Control%20Room%20-%20Key%20Decisions.pdf)
-- [Loom narration and demo steps](evaluation/LOOM-SCRIPT.md)
-- [Independent review and repaired defects](evaluation/INDEPENDENT-REVIEW.md)
-- [Pilot scorecard](evaluation/PILOT-SCORECARD.md) and [ownership contract](evaluation/AUTHORING-CONTRACT.md)
-- [Delivery, provenance and verification record](evaluation/DELIVERY.md)
+- [Rendered briefing and diagrams](evaluation/combined/index.html) — download/open locally for the interactive economics calculator.
+- [System design](evaluation/combined/SYSTEM-DESIGN.md) and [operating playbook](evaluation/combined/OPERATING-PLAYBOOK.md).
+- [Economics and assumptions](evaluation/combined/ECONOMICS.md).
+- [Key decisions: one-page PDF](evaluation/combined/Key%20Decisions%20-%20Paved%20Road.pdf).
+- [Loom beat sheet](evaluation/combined/LOOM-BEAT-SHEET.md) — recording remains to be made.
+- [Independent build review](evaluation/combined/BUILD-REVIEW.md) — initial failures, repairs and final checks.
+
+Earlier files directly under `evaluation/` preserve the historical phase; the combined package supersedes their recommendation and economic assumptions. Final application verification: 111 repository tests and 10 new independent probes passed, plus build/typecheck and browser rechecks. Run the new probes with `node --import tsx evaluation/independent-phase-probes.mjs`.
 
 Devin Cloud authored the application and its tests. Codex scoped and researched the case, orchestrated the build, performed independent review and prepared the evaluation materials. The independent probes live in evaluation/ and run with `node --import tsx evaluation/independent-probes.mjs`.
 

@@ -1,0 +1,15 @@
+# Key decisions
+
+**Recommendation: build, phased and gated.** Pilot a Devin-built paved road for internal tools before replacing Power Apps. Keep Power Apps code apps as the fallback if the cost or risk of platform ownership is too high. Devin can be the builder on either path.
+
+**I scoped for reuse.** The question is whether this team can own thirteen tools, not whether an agent can generate one dashboard. Devin built separate refund and vendor bank-change interfaces over a shared decision kernel, with server-side team scope and a portfolio of proposed owners. Two apps run; eleven entries are explicitly planned. The refund ledger and vendor verification view show where app-specific code belongs.
+
+**Flexible code stops at the data boundary.** Ops can describe a workflow and Devin can implement its interface, but the browser cannot grant permissions. Authoritative services must enforce record scope, approval rights, separation of duties, state transitions and audit. Hooks and tests help catch mistakes; they do not replace independently controlled credentials and deployment. Existing governed APIs or Dataverse permissions should be reused wherever they already meet the requirement.
+
+**Shared ownership does not mean nobody owns production.** Each app needs an Ops owner, a technical owner and a backup. Platform Engineering owns the common runtime, delivery and recovery. Domain teams own business policy and integrations. One manager can oversee several apps, but that is a proposed operating arrangement, not evidence that staffing is solved. Ops starts with specification, UAT and routine change requests; privileged changes retain engineering review.
+
+**I chose a small foundation over a platform clone.** A monorepo, typed contracts and reusable controls are enough to test the approach. Separate production frontend releases remain a design proposal. The first checkpoint passed 101 tests, but independent review found scope leaks and inconsistent reason validation. The shared reason fix now serves both workflows. Review and regression evidence belong in every PR; agent output alone is not acceptance.
+
+**The economic gate is human effort.** Devin may write infrastructure, apps and maintenance patches; the pilot must measure specification, review, correction and operation as well as agent usage. An illustrative steady-state case saves $119,000 annually, assuming $200,000 of removable licence spend, 0.5 technical FTE across the portfolio and $31,000 of operating allowances. Transition costs are extra. With lower licence removal and one FTE of ownership, the same model loses money. Capacity freed for core product work is not automatically a cash saving.
+
+**The prototype is evidence, not production assurance.** Synthetic identities, local storage and tests do not establish real SSO, integration correctness, recovery or long-term support cost. No Microsoft environment was available, so code-app security and deployment remain untested. Proceed with one low-risk workflow, prove reuse on a second, and decide before renewal. Migrate KYC only after the platform passes the pilot's security, recovery and ownership checks.

@@ -63,9 +63,12 @@ flowchart TB
 ```
 
 Domain teams own apps; platform engineering owns the foundation apps ride
-on; Devin produces constrained definitions and workflow-specific UI, never
-holds production credentials, and cannot widen ceilings, disable kernel
-controls, or create records in a foreign scope.
+on. In the target production workflow, Devin produces app definitions and
+workflow-specific UI without production credentials; protected review and
+deployment permissions govern changes to shared controls. These repository
+protections are not configured in the prototype. Runtime manifest validation
+and server-side scope checks are implemented; unrestricted repository write
+access could still alter that implementation.
 
 ## Boundary honesty
 
