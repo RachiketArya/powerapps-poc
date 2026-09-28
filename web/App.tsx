@@ -162,8 +162,9 @@ function Catalog({ apps, onOpen }: { apps: CatalogApp[]; onOpen: (appId: string)
         <div>
           <h1>App catalog</h1>
           <p className="muted">
-            Two apps are built and running on the shared kernel. Each is described by a validated definition that is
-            re-checked every time the runtime loads it.
+            {apps.length === 1 ? "One app is" : `${apps.length} apps are`} running on the shared kernel, two of them
+            shipped and the rest activated locally from the workshop. Each is described by a validated definition that
+            is re-checked every time the runtime loads it.
           </p>
         </div>
       </header>
@@ -210,8 +211,8 @@ function Catalog({ apps, onOpen }: { apps: CatalogApp[]; onOpen: (appId: string)
         </tbody>
       </table>
       <p className="muted small">
-        Ten further queues are plausible on this kernel but are not built. Two apps exist here; anything else is future
-        work.
+        Two queues were built for this proof; anything activated beyond them is a reconfiguration of the same two
+        workflows. Ten further queues are plausible on this kernel but are not built.
       </p>
     </div>
   );

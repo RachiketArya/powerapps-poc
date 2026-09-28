@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   api,
@@ -32,12 +32,20 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
   const canCreate = definition.capabilities.includes("record.create");
   const isRefund = app.workflow?.entityType === "refund_request";
 
+  // Creating a record changes the filter and reloads the queue at the same
+  // time; only the newest request may write to the table, or the reply to the
+  // old filter can land last and leave rows that do not match it.
+  const listRequest = useRef(0);
+
   const loadList = useCallback(async () => {
+    const seq = ++listRequest.current;
     try {
       const res = await api.records(definition.appId, { status, q: query });
+      if (seq !== listRequest.current) return;
       setRecords(res.records);
       setListError(null);
     } catch (err) {
+      if (seq !== listRequest.current) return;
       setListError(err instanceof ApiError ? err.message : "Could not load the queue");
       setRecords([]);
     }

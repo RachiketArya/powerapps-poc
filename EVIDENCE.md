@@ -76,6 +76,15 @@ All four were reproduced before fixing and each has a regression test in `platfo
 | Activity fetched once on mount, so a platform admin's oversight events stayed on screen after switching to a maker identity | Activity takes `actorId`, clears platform/decision/assurance state and refetches whenever it changes, ignoring responses from a superseded identity | Typecheck plus browser acceptance (no component test harness in this repo) |
 | Refund list showed em dashes for `payment_reference` and `customer_label`, and detail for `payment_amount_cents`, because the adapter returned a nested `payment` object while the registry vocabulary is flat | The refund adapter answers in the registry's field names (`payment_reference`, `customer_label`, `payment_amount_cents`, `payment_currency`, `payment_captured_at`); the nested object and the two hand-written detail rows that duplicated it are gone | "returns every declared list and detail field as a value, not a nested object" |
 
+## Defects found by browser acceptance on `8dd5f12`
+
+| Defect | Repair |
+| --- | --- |
+| Creating a record while a non-pending filter was selected left approved rows in a queue labelled "Pending review": the create handler reset the filter and reloaded the list at the same time, and the reply to the old filter could land last | The queue keeps a request sequence and ignores any response that a newer request has superseded |
+| The catalog intro and footer said "Two apps are built and running" / "Two apps exist here" even after a third app was activated from the workshop | The count is read from the catalog; the copy now says two queues were built and anything activated beyond them is a reconfiguration of the same two workflows |
+
+Everything else in the acceptance pass held: populated payment fields shown once, separation of duties, viewer restrictions, reason minimums, vendor inbound-email-only refusal and callback-verified approval, maker validation with activation refused, admin activation with a new digest, Activity clearing on an identity switch, and the assurance panel showing recorded vs current revision with the stale warning.
+
 ## Test coverage by boundary
 
 | Boundary | Where |
@@ -108,7 +117,7 @@ The forbidden-content scanner's executable-expression rule was written as `/\b(f
 
 ## Browser verification
 
-Recorded separately after the milestone push; see the session message and recording. Nothing in the README or this file claims a browser check that has not happened.
+Performed in Chrome on `8dd5f12` against the local dev servers with synthetic data; the recording and screenshots are attached to the session. Findings are listed above: two UI defects, everything else passed. Nothing in the README or this file claims a browser check that has not happened.
 
 ## Known gaps
 
