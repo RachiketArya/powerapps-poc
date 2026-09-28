@@ -115,7 +115,7 @@ export default function App() {
           {actor && view.kind === "workshop" && <Workshop actor={actor} onPromoted={() => void refreshCatalog()} />}
           {actor && view.kind === "activity" && <Activity actorId={actor.id} />}
           {actor && view.kind === "app" && current && current.status === "active" && (
-            <AppModule key={`${current.appId}-${current.version}`} app={current} actor={actor} />
+            <AppModule key={`${current.appId}-${current.version}-${actor.id}`} app={current} actor={actor} />
           )}
           {actor && view.kind === "app" && current && current.status === "quarantined" && (
             <Quarantined app={current} />
