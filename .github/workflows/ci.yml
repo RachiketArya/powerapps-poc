@@ -1,0 +1,29 @@
+# Illustrative only. A workflow file cannot protect the branch it lives on:
+# until repository rulesets require this check and CODEOWNERS review on
+# platform/, anyone who can push can also change or delete this file.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run assure
+      - run: npm run build
+      - run: npm audit --audit-level=moderate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: assurance-results
+          path: evidence/test-results.json

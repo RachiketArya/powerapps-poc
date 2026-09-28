@@ -1,0 +1,56 @@
+{
+  "manifestVersion": 1,
+  "appId": "markup-demo",
+  "title": "Refund review",
+  "summary": "Queue with custom markup <b>banner</b> for the team to read every morning.",
+  "workflow": "refund_review",
+  "connectorId": "synthetic.payments.local",
+  "capabilities": [
+    "queue.read",
+    "record.read",
+    "record.create",
+    "decision.approve",
+    "decision.reject",
+    "audit.read"
+  ],
+  "view": {
+    "listFields": [
+      "id",
+      "payment_reference",
+      "customer_label",
+      "amount_cents",
+      "status",
+      "created_at"
+    ],
+    "detailFields": [
+      "id",
+      "payment_reference",
+      "customer_label",
+      "payment_amount_cents",
+      "remaining_refundable_cents",
+      "amount_cents",
+      "reason",
+      "status",
+      "version",
+      "requester_name",
+      "decider_name",
+      "decision_reason",
+      "created_at"
+    ],
+    "pageSize": 25
+  },
+  "labels": {
+    "queueTitle": "<img src=x onerror=\"alert(1)\">Refunds",
+    "approveAction": "Approve for execution",
+    "rejectAction": "Reject request",
+    "emptyState": "No refund requests match this filter."
+  },
+  "owner": {
+    "team": "Payments Operations",
+    "contactHandle": "@ops-payments"
+  },
+  "risk": {
+    "tier": "high",
+    "dataClass": "synthetic"
+  }
+}

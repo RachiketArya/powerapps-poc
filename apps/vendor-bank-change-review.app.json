@@ -1,0 +1,42 @@
+{
+  "manifestVersion": 1,
+  "appId": "vendor-bank-change-review",
+  "title": "Vendor bank-change review",
+  "summary": "Second line review of requested changes to synthetic, masked vendor payment references before any downstream release.",
+  "workflow": "vendor_bank_change_review",
+  "connectorId": "synthetic.vendor-master.local",
+  "capabilities": ["queue.read", "record.read", "record.create", "decision.approve", "decision.reject", "audit.read"],
+  "view": {
+    "listFields": ["id", "vendor_name", "current_masked_ref", "new_masked_ref", "verification_channel", "status", "created_at"],
+    "detailFields": [
+      "id",
+      "vendor_name",
+      "current_masked_ref",
+      "new_masked_ref",
+      "country",
+      "verification_channel",
+      "reason",
+      "status",
+      "version",
+      "requester_name",
+      "decider_name",
+      "decision_reason",
+      "created_at"
+    ],
+    "pageSize": 25
+  },
+  "labels": {
+    "queueTitle": "Vendor bank changes awaiting review",
+    "approveAction": "Approve for execution",
+    "rejectAction": "Reject change",
+    "emptyState": "No vendor bank changes match this filter."
+  },
+  "owner": {
+    "team": "Vendor Controls",
+    "contactHandle": "@ops-vendor-controls"
+  },
+  "risk": {
+    "tier": "high",
+    "dataClass": "synthetic"
+  }
+}

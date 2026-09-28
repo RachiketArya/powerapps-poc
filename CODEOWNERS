@@ -1,0 +1,15 @@
+# Illustrative. This file only has force once a repository ruleset requires
+# review from code owners; nothing in this repository enforces it today.
+#
+# The intent: app makers may propose changes under apps/, while the kernel,
+# the validator, the registry, the pipeline and dependencies require platform
+# review.
+
+/platform/            @platform-owners
+/.github/             @platform-owners
+/package.json         @platform-owners
+/package-lock.json    @platform-owners
+/CODEOWNERS           @platform-owners
+/SECURITY_BOUNDARY.md @platform-owners
+
+/apps/                @ops-app-makers @platform-owners

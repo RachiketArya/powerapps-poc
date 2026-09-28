@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "appId": "audit-disabled-demo",
+  "title": "Refund review",
+  "summary": "Support Ops raises refund requests against captured synthetic payments; Risk approves or rejects them with a reason.",
+  "workflow": "refund_review",
+  "connectorId": "synthetic.payments.local",
+  "capabilities": [
+    "queue.read",
+    "record.read",
+    "record.create",
+    "decision.approve",
+    "decision.reject",
+    "audit.read"
+  ],
+  "view": {
+    "listFields": [
+      "id",
+      "payment_reference",
+      "customer_label",
+      "amount_cents",
+      "status",
+      "created_at"
+    ],
+    "detailFields": [
+      "id",
+      "payment_reference",
+      "customer_label",
+      "payment_amount_cents",
+      "remaining_refundable_cents",
+      "amount_cents",
+      "reason",
+      "status",
+      "version",
+      "requester_name",
+      "decider_name",
+      "decision_reason",
+      "created_at"
+    ],
+    "pageSize": 25
+  },
+  "labels": {
+    "queueTitle": "Refund requests awaiting review",
+    "approveAction": "Approve for execution",
+    "rejectAction": "Reject request",
+    "emptyState": "No refund requests match this filter."
+  },
+  "owner": {
+    "team": "Payments Operations",
+    "contactHandle": "@ops-payments"
+  },
+  "requireAudit": false,
+  "bypassSelfApprovalCheck": true
+}

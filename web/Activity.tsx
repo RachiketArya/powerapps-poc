@@ -1,0 +1,148 @@
+import { useEffect, useState } from "react";
+import { api, formatTime, type AssuranceRun, type DecisionEvent, type PlatformEvent } from "./api";
+
+export function Activity() {
+  const [platform, setPlatform] = useState<PlatformEvent[]>([]);
+  const [decisions, setDecisions] = useState<DecisionEvent[]>([]);
+  const [assurance, setAssurance] = useState<{
+    run: AssuranceRun | null;
+    error: string | null;
+    command: string;
+    invariants: Array<{ workflow: string; control: string }>;
+    productionGaps: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    void api.activity().then((res) => {
+      setPlatform(res.platform);
+      setDecisions(res.decisions);
+    });
+    void api.assurance().then(setAssurance);
+  }, []);
+
+  return (
+    <div className="surface">
+      <header className="surface-head">
+        <div>
+          <h1>Activity and assurance</h1>
+          <p className="muted">
+            Everything below is read from this runtime: promotion attempts, decisions, and the last recorded test run.
+          </p>
+        </div>
+      </header>
+
+      <div className="activity">
+        <section>
+          <h2>Platform events</h2>
+          <table className="records">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>App</th>
+                <th>Actor</th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {platform.map((e) => (
+                <tr key={e.id}>
+                  <td>{formatTime(e.created_at)}</td>
+                  <td>{e.event_type}</td>
+                  <td>
+                    {e.app_id ?? "—"}
+                    {e.app_version ? ` v${e.app_version}` : ""}
+                  </td>
+                  <td>
+                    {e.actor_id} ({e.actor_role})
+                  </td>
+                  <td className={e.outcome === "denied" ? "denied-text" : "success-text"}>{e.outcome}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2>Decision events</h2>
+          <table className="records">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Record</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decisions.map((e) => (
+                <tr key={e.id}>
+                  <td>{formatTime(e.created_at)}</td>
+                  <td>{e.entity_id}</td>
+                  <td>{e.action}</td>
+                  <td>
+                    {e.actor_name ?? e.actor_id} ({e.actor_role})
+                  </td>
+                  <td>{e.to_status ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2>Last recorded assurance run</h2>
+          {assurance?.error && <p className="notice muted-notice">{assurance.error}</p>}
+          {assurance?.run && (
+            <>
+              <p className={assurance.run.failed > 0 ? "notice denied" : "notice success"}>
+                {assurance.run.passed}/{assurance.run.total} passed, {assurance.run.failed} failed · started{" "}
+                {assurance.run.startedAt ? formatTime(assurance.run.startedAt) : "unknown"} · recorded{" "}
+                {formatTime(assurance.run.recordedAt)}
+              </p>
+              {assurance.run.files.map((f) => (
+                <details key={f.file}>
+                  <summary>
+                    {f.file} — {f.tests.length} tests, {f.status}
+                  </summary>
+                  <ul className="tests">
+                    {f.tests.map((t) => (
+                      <li key={t.title} className={t.status === "passed" ? "success-text" : "denied-text"}>
+                        {t.status === "passed" ? "passed" : t.status} · {t.title}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </>
+          )}
+          <p className="muted small">
+            This view shows whatever <code>{assurance?.command ?? "npm run assure"}</code> last wrote to
+            evidence/test-results.json. It is not a hard-coded status, and a failing run is displayed as failing.
+          </p>
+        </section>
+
+        <section>
+          <h2>Platform invariants</h2>
+          <ul className="plain">
+            {assurance?.invariants.map((i) => (
+              <li key={`${i.workflow}-${i.control}`}>
+                <code>{i.workflow}</code> {i.control}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h2>Production gaps</h2>
+          <ul className="plain">
+            {assurance?.productionGaps.map((g) => (
+              <li key={g}>{g}</li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}

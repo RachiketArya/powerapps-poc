@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/
+*.sqlite
+*.sqlite-journal
+.DS_Store
+evidence/*.tmp
