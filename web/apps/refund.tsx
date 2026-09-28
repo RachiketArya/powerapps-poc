@@ -119,7 +119,7 @@ function RefundCreateForm({ appId, onCreated }: { appId: string; onCreated: (id:
           {payments.map((p) => (
             <option key={p.id} value={p.id}>
               {p.reference} · {formatCents(p.amount_cents, p.currency)} ·{" "}
-              {formatCents(p.remaining_refundable_cents)} refundable
+              {formatCents(p.remaining_refundable_cents, p.currency)} refundable
             </option>
           ))}
         </select>
@@ -128,7 +128,7 @@ function RefundCreateForm({ appId, onCreated }: { appId: string; onCreated: (id:
         <span>Amount in cents</span>
         <input value={form.amount ?? ""} onChange={(e) => set("amount", e.target.value)} inputMode="numeric" />
       </label>
-      {selected && <p className="muted small">{fieldLabel("remaining_refundable_cents")}: {formatCents(selected.remaining_refundable_cents)}</p>}
+      {selected && <p className="muted small">{fieldLabel("remaining_refundable_cents")}: {formatCents(selected.remaining_refundable_cents, selected.currency)}</p>}
       <label className="grow">
         <span>Reason</span>
         <input value={form.reason ?? ""} onChange={(e) => set("reason", e.target.value)} />
