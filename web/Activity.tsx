@@ -151,7 +151,7 @@ export function Activity({ actorId }: { actorId: string }) {
                 {assurance.revision.stale
                   ? "The source has moved since the run, so these results may not describe the code running now."
                   : assurance.revision.stale === false
-                    ? "Same revision, so the results describe this code."
+                    ? "Recorded commit matches; uncommitted edits may differ. This is the last recorded run, not proof of current source coverage."
                     : "Revision could not be determined."}
               </p>
               {assurance.run.files.map((f) => (
