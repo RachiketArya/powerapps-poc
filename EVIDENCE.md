@@ -80,7 +80,7 @@ All four were reproduced before fixing and each has a regression test in `platfo
 
 | Defect | Repair |
 | --- | --- |
-| Creating a record while a non-pending filter was selected left approved rows in a queue labelled "Pending review": the create handler reset the filter and reloaded the list at the same time, and the reply to the old filter could land last | The queue keeps a request sequence and ignores any response that a newer request has superseded |
+| Creating a record while a non-pending filter was selected left approved rows in a queue labelled "Pending review": the create handler reset the filter and then reloaded through the old `loadList` closure, whose stale-filter request started last and won | Two attempts. The first added a request sequence so a superseded response is ignored; that was not enough, because the stale request was issued *after* the new-filter one and legitimately won the sequence (confirmed still failing in the browser on `a1b94d1`). The fix is to stop reloading from the handler at all: creation and decisions bump a reload token the queue effect depends on, so the request always uses the filter current after the handler's state updates, and a reload still happens when the filter did not change. The sequence guard is kept for overlapping filter and search edits |
 | The catalog intro and footer said "Two apps are built and running" / "Two apps exist here" even after a third app was activated from the workshop | The count is read from the catalog; the copy now says two queues were built and anything activated beyond them is a reconfiguration of the same two workflows |
 
 Everything else in the acceptance pass held: populated payment fields shown once, separation of duties, viewer restrictions, reason minimums, vendor inbound-email-only refusal and callback-verified approval, maker validation with activation refused, admin activation with a new digest, Activity clearing on an identity switch, and the assurance panel showing recorded vs current revision with the stale warning.
@@ -117,7 +117,13 @@ The forbidden-content scanner's executable-expression rule was written as `/\b(f
 
 ## Browser verification
 
-Performed in Chrome on `8dd5f12` against the local dev servers with synthetic data; the recording and screenshots are attached to the session. Findings are listed above: two UI defects, everything else passed. Nothing in the README or this file claims a browser check that has not happened.
+Performed in Chrome against the local dev servers with synthetic data; recordings and screenshots are attached to the session.
+
+- Full acceptance pass on `8dd5f12`: eight scenario groups passed, two failed (the queue and catalog defects above).
+- Targeted recheck on `a1b94d1`: the catalog copy passed; the queue defect reproduced again, so the first repair was wrong and was replaced.
+- Targeted recheck of the queue path on the final revision, reported with the same honesty as the failures.
+
+Nothing in the README or this file claims a browser check that has not happened.
 
 ## Known gaps
 

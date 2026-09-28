@@ -51,9 +51,15 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
     }
   }, [definition.appId, status, query]);
 
+  // Bumped when a record is created or decided. Reloading through this
+  // instead of calling `loadList` from the handler keeps the request on the
+  // filter that is current after the handler's state updates, and still
+  // reloads when the filter did not change.
+  const [reloadToken, setReloadToken] = useState(0);
+
   useEffect(() => {
     void loadList();
-  }, [loadList]);
+  }, [loadList, reloadToken]);
 
   const loadDetail = useCallback(
     async (id: string) => {
@@ -74,7 +80,7 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
   async function afterChange(id: string) {
     setSelectedId(id);
     await loadDetail(id);
-    await loadList();
+    setReloadToken((n) => n + 1);
   }
 
   return (
