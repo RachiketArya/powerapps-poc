@@ -146,9 +146,10 @@ Per-user resource scope: `scope` column on users, payments, `refund_requests` an
 
 | Defect on `5afc9a9` (green suite at the time) | Repair |
 | --- | --- |
-| `scopeAllows({scope:""}, "")` and `scopeAllows({scope:"us-ops"}, undefined)` matched; an empty-scope user could also POST a valid vendor record and get 201 | `scopeAllows` fails closed on empty/missing scopes on either side, and both create paths refuse actors without a real team scope |
+| `scopeAllows({scope:""}, "")` and `scopeAllows({}, undefined)` matched; an empty-scope user could also POST a valid vendor record and get 201 | `scopeAllows` fails closed on empty/missing scopes on either side, and both create paths refuse actors without a real team scope |
 | `*` oversight could POST a refund against an EMEA payment, and the record was stamped `us-ops`, exposing foreign payment detail to the US queue | `*` oversight can no longer create business records at all, and a created refund derives its scope from the authorized payment, never the caller |
 | Vendor approval reason `OK` + 25 spaces + `verified` passed the 20-char floor because the floor measured raw input while the kernel stored the normalized reason | Shared `assertReasonLength` (the phase's shared-maintenance change, reused by the kernel's 5-char floor and the vendor 20-char floor) measures the whitespace-normalized reason |
+| Blank-scope rows still matched a blank-scope actor on the list and payment-option paths (`WHERE scope = ?` alone), so a degraded record leaked to a degraded user | Empty actor scope now returns an empty result on refund/vendor lists and payment options outright; degraded blank-scope rows are invisible to everyone except `*` oversight reads that only show rows with a real scope match |
 
 ### Module split and portfolio
 
@@ -159,7 +160,7 @@ Per-user resource scope: `scope` column on users, payments, `refund_requests` an
 ### Verification on this branch
 
 - `npm run typecheck` — clean
-- `npm test` — 107/107 (11 + 6 scope/boundary regressions)
+- `npm test` — 111/111 (15 + 6 scope/boundary regressions)
 - `npm run build` — clean
 - Browser inspection — pending targeted check of the catalog portfolio table and both module inspections
 - `npm audit` — re-run before freeze

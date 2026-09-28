@@ -304,7 +304,9 @@ export function createApp(db: Db) {
     const payments = (
       scope === "*"
         ? db.prepare(`SELECT * FROM payments ORDER BY captured_at DESC`).all()
-        : db.prepare(`SELECT * FROM payments WHERE scope = ? ORDER BY captured_at DESC`).all(scope)
+        : scope
+          ? db.prepare(`SELECT * FROM payments WHERE scope = ? ORDER BY captured_at DESC`).all(scope)
+          : []
     ) as Array<{ id: string }>;
     return res.json({
       payments: payments.map((p) => ({ ...p, remaining_refundable_cents: remainingRefundableCents(db, p.id) })),

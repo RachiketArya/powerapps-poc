@@ -58,6 +58,10 @@ export function listRefunds(
   const clauses: string[] = [];
   const params: unknown[] = [];
   if (actor.scope !== "*") {
+    if (!actor.scope) {
+      // Empty scope fails closed even if a degraded row also has one.
+      return [];
+    }
     clauses.push(`r.scope = ?`);
     params.push(actor.scope);
   }

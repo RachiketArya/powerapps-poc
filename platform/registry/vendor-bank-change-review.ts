@@ -57,6 +57,9 @@ export function listVendorBankChanges(db: Db, actor: Actor, opts: { status?: str
   const clauses: string[] = [];
   const params: unknown[] = [];
   if (actor.scope !== "*") {
+    if (!actor.scope) {
+      return [];
+    }
     clauses.push(`v.scope = ?`);
     params.push(actor.scope);
   }

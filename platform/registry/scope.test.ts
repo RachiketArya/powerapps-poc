@@ -272,3 +272,43 @@ describe("scopeAllows fails closed on malformed input", () => {
     expect(scopeAllows({ scope: "us-ops" }, "emea-ops")).toBe(false);
   });
 });
+
+describe("degraded rows with a blank scope fail closed on read paths", () => {
+  it("an empty-scope record is invisible even to an empty-scope actor", async () => {
+    db.prepare(`UPDATE users SET scope = '' WHERE id = ?`).run(REQUESTER);
+    db.prepare(`UPDATE refund_requests SET scope = '' WHERE id = 'rr_2002'`).run();
+    const cookie = await login(REQUESTER);
+    const list = await request(app).get("/api/apps/refund-review/records?status=all").set("Cookie", cookie);
+    expect(list.status).toBe(200);
+    expect(list.body.records).toEqual([]);
+    const detail = await request(app).get("/api/apps/refund-review/records/rr_2002").set("Cookie", cookie);
+    expect(detail.status).toBe(404);
+  });
+
+  it("blank vendor scope is invisible on the vendor list too", async () => {
+    db.prepare(`UPDATE users SET scope = '' WHERE id = ?`).run(REQUESTER);
+    db.prepare(`UPDATE vendor_bank_changes SET scope = '' WHERE id = 'vbc_3001'`).run();
+    const list = await request(app)
+      .get("/api/apps/vendor-bank-change-review/records?status=all")
+      .set("Cookie", await login(REQUESTER));
+    expect(list.body.records).toEqual([]);
+  });
+
+  it("a blank-scope payment is not offered to an empty-scope user", async () => {
+    db.prepare(`UPDATE users SET scope = '' WHERE id = ?`).run(REQUESTER);
+    db.prepare(`UPDATE payments SET scope = '' WHERE id = 'pay_1002'`).run();
+    const res = await request(app).get("/api/apps/refund-review/payments").set("Cookie", await login(REQUESTER));
+    expect(res.body.payments).toEqual([]);
+  });
+
+  it("a normal actor still cannot reach a degraded blank-scope record", async () => {
+    db.prepare(`UPDATE refund_requests SET scope = '' WHERE id = 'rr_2002'`).run();
+    const res = await request(app)
+      .get("/api/apps/refund-review/records/rr_2002")
+      .set("Cookie", await login(APPROVER));
+    expect(res.status).toBe(404);
+    const list = await request(app).get("/api/apps/refund-review/records?status=all").set("Cookie", await login(APPROVER));
+    const ids = (list.body.records as Array<{ id: string }>).map((r) => r.id);
+    expect(ids).not.toContain("rr_2002");
+  });
+});
