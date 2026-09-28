@@ -162,8 +162,18 @@ Per-user resource scope: `scope` column on users, payments, `refund_requests` an
 - `npm run typecheck` — clean
 - `npm test` — 111/111 (15 + 6 scope/boundary regressions)
 - `npm run build` — clean
-- Browser inspection — pending targeted check of the catalog portfolio table and both module inspections
-- `npm audit` — re-run before freeze
+- `npm audit` — 0 vulnerabilities
+- Browser inspection on `83c758d` (recording attached): portfolio table (13 rows, 2 Runnable / 11 Planned), refund payment-ledger card with real values, vendor compare card + verification checklist with the inbound-email denial, Mira approving vbc_3001 with queue refresh, and the US↔EMEA identity switch clearing queue, detail and open create form. Two defects were caught and repaired during it:
+
+| Defect | Repair |
+| --- | --- |
+| Switching demo identity left the previous actor's queue, detail and create-form state on screen while the API enforced scope correctly | `AppModule` is keyed on the actor, so an identity switch remounts and clears all component state (`83c758d`) |
+| The "Remaining after approval" projection stayed visible on a decided record and read stale by the request's amount (rr_2001 showed $75 instead of $100) | The projection row renders only while the record is pending (`c432d95`) |
+| The refund create form formatted remaining-refundable amounts without `payment.currency`, showing `$` for the EUR payment | Both formatters now pass the payment currency; verified `€2,400.00 refundable` as Ovid (`3435096`) |
+
+### Final phase-2 revision
+
+`3435096eedb71998493dd28bcf96173ffc2432be` — draft PR #1. Freeze: no further feature work on this branch.
 
 ### Phase-2 known gaps
 
