@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../kernel/db.js";
 import {
   DecisionError,
+  assertReasonLength,
   decide,
   recordCreatedEvent,
+  scopeAllows,
   type Actor,
   type DecidableRecord,
   type DecisionAction,
@@ -51,9 +53,13 @@ const UNVERIFIABLE_CHANNELS: VerificationChannel[] = ["inbound_email_only"];
 
 const MIN_APPROVAL_REASON_LENGTH = 20;
 
-export function listVendorBankChanges(db: Db, opts: { status?: string; q?: string }) {
+export function listVendorBankChanges(db: Db, actor: Actor, opts: { status?: string; q?: string }) {
   const clauses: string[] = [];
   const params: unknown[] = [];
+  if (actor.scope !== "*") {
+    clauses.push(`v.scope = ?`);
+    params.push(actor.scope);
+  }
   if (opts.status && opts.status !== "all") {
     clauses.push(`v.status = ?`);
     params.push(opts.status);
@@ -76,7 +82,7 @@ export function listVendorBankChanges(db: Db, opts: { status?: string; q?: strin
     .all(...params);
 }
 
-export function getVendorBankChange(db: Db, id: string) {
+export function getVendorBankChange(db: Db, id: string, actor: Actor) {
   const row = db
     .prepare(
       `SELECT v.*, ru.display_name AS requester_name, du.display_name AS decider_name
@@ -86,7 +92,7 @@ export function getVendorBankChange(db: Db, id: string) {
         WHERE v.id = ?`,
     )
     .get(id);
-  if (!row) return undefined;
+  if (!row || !scopeAllows(actor, (row as VendorBankChangeRow).scope)) return undefined;
   const events = db
     .prepare(
       `SELECT e.*, u.display_name AS actor_name
@@ -147,8 +153,8 @@ export function createVendorBankChange(
     db.prepare(
       `INSERT INTO vendor_bank_changes
          (id, vendor_name, current_masked_ref, new_masked_ref, country, verification_channel,
-          reason, status, version, requested_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)`,
+          reason, status, version, requested_by, created_at, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?, ?)`,
     ).run(
       id,
       input.vendorName.trim(),
@@ -159,6 +165,7 @@ export function createVendorBankChange(
       reason,
       actor.id,
       createdAt,
+      actor.scope === "*" ? "us-ops" : actor.scope,
     );
     recordCreatedEvent({
       db,
@@ -209,13 +216,12 @@ export function decideVendorBankChange(
           409,
         );
       }
-      if (args.reason.trim().length < MIN_APPROVAL_REASON_LENGTH) {
-        throw new DecisionError(
-          "domain_rule",
-          `Approving a bank change requires at least ${MIN_APPROVAL_REASON_LENGTH} characters describing the independent verification performed`,
-          400,
-        );
-      }
+      assertReasonLength(
+        args.reason,
+        MIN_APPROVAL_REASON_LENGTH,
+        `Approving a bank change requires at least ${MIN_APPROVAL_REASON_LENGTH} characters describing the independent verification performed`,
+        "domain_rule",
+      );
     },
     detail: (record) => ({
       vendor_name: record.vendor_name,

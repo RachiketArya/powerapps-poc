@@ -20,11 +20,19 @@ export interface Actor {
   id: string;
   role: Role;
   displayName: string;
+  /**
+   * Per-user resource scope resolved from the users table. "*" (platform
+   * oversight) sees every scope. UI filtering is never authorization: every
+   * list, detail, decision and audit path enforces this on the server.
+   */
+  scope: string;
 }
 
 export interface DecidableRecord {
   id: string;
   status: RecordStatus;
+  /** Team scope the record belongs to. */
+  scope: string;
   version: number;
   requested_by: string;
 }
@@ -108,6 +116,27 @@ function normalizeReason(reason: string): string {
   return reason.trim().replace(/\s+/g, " ");
 }
 
+/** Whether an actor may touch a record in `scope`. "*" is platform oversight. */
+export function scopeAllows(actor: { scope: string }, recordScope: string): boolean {
+  return actor.scope === "*" || actor.scope === recordScope;
+}
+
+/**
+ * Shared reason floor, reused by the kernel and by domain validators that
+ * need a stricter length (the vendor workflow's 20-character approval
+ * narrative). Kept in one place so the two checks cannot drift apart.
+ */
+export function assertReasonLength(
+  reason: string,
+  min: number,
+  message: string,
+  code: "reason_required" | "domain_rule" = "reason_required",
+): void {
+  if (reason.trim().length < min) {
+    throw new DecisionError(code, message, 400);
+  }
+}
+
 export function decide<T extends DecidableRecord>(req: DecisionRequest<T>): DecisionResult<T> {
   const {
     db,
@@ -128,7 +157,11 @@ export function decide<T extends DecidableRecord>(req: DecisionRequest<T>): Deci
 
   const run = db.transaction((): DecisionResult<T> => {
     const record = readRecord<T>(db, table, entityId);
-    if (!record) throw new DecisionError("not_found", "Record not found", 404);
+    if (!record || !scopeAllows(actor, record.scope)) {
+      // A record outside the actor's scope is answered the same way as one
+      // that does not exist, so a guessed id reveals nothing.
+      throw new DecisionError("not_found", "Record not found", 404);
+    }
 
     if (!decisionRoles.includes(actor.role)) {
       throw new DecisionError(
@@ -144,13 +177,11 @@ export function decide<T extends DecidableRecord>(req: DecisionRequest<T>): Deci
         403,
       );
     }
-    if (reason.length < MIN_REASON_LENGTH) {
-      throw new DecisionError(
-        "reason_required",
-        `A decision reason of at least ${MIN_REASON_LENGTH} characters is required`,
-        400,
-      );
-    }
+    assertReasonLength(
+      reason,
+      MIN_REASON_LENGTH,
+      `A decision reason of at least ${MIN_REASON_LENGTH} characters is required`,
+    );
     // Replay handling runs only after the caller has been authorized for the
     // record they actually asked about, and only for a byte-for-byte identical
     // request. Any other reuse of the key is a conflict: a cached result must

@@ -65,14 +65,14 @@ export function createApp(db: Db) {
     if (typeof token === "string") {
       const row = db
         .prepare(
-          `SELECT u.id, u.role, u.display_name
+          `SELECT u.id, u.role, u.display_name, u.scope
              FROM demo_sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token = ?`,
         )
-        .get(token) as { id: string; role: Actor["role"]; display_name: string } | undefined;
+        .get(token) as { id: string; role: Actor["role"]; display_name: string; scope: string } | undefined;
       // The actor is resolved here and nowhere else. Any actor/role fields in a
       // request body are ignored by every handler below.
-      if (row) req.actor = { id: row.id, role: row.role, displayName: row.display_name };
+      if (row) req.actor = { id: row.id, role: row.role, displayName: row.display_name, scope: row.scope };
     }
     next();
   });
@@ -87,7 +87,7 @@ export function createApp(db: Db) {
   });
 
   app.get("/api/demo-users", (_req, res) => {
-    const users = db.prepare(`SELECT id, display_name, role, team FROM users ORDER BY role, id`).all();
+    const users = db.prepare(`SELECT id, display_name, role, team, scope FROM users ORDER BY role, id`).all();
     res.json({
       users,
       notice: "Demo identity selector. This is NOT authentication and grants no real access.",
@@ -291,7 +291,12 @@ export function createApp(db: Db) {
     if (entityOf(req) !== "refund_request") {
       return res.status(404).json({ error: "not_found", message: "This workflow has no payment options" });
     }
-    const payments = db.prepare(`SELECT * FROM payments ORDER BY captured_at DESC`).all() as Array<{ id: string }>;
+    const scope = req.actor!.scope;
+    const payments = (
+      scope === "*"
+        ? db.prepare(`SELECT * FROM payments ORDER BY captured_at DESC`).all()
+        : db.prepare(`SELECT * FROM payments WHERE scope = ? ORDER BY captured_at DESC`).all(scope)
+    ) as Array<{ id: string }>;
     return res.json({
       payments: payments.map((p) => ({ ...p, remaining_refundable_cents: remainingRefundableCents(db, p.id) })),
     });
@@ -299,7 +304,7 @@ export function createApp(db: Db) {
 
   app.get("/api/apps/:appId/records/:id/audit", withApp("audit.read"), (req, res) => {
     const record = (
-      entityOf(req) === "refund_request" ? getRefund(db, req.params.id!) : getVendorBankChange(db, req.params.id!)
+      entityOf(req) === "refund_request" ? getRefund(db, req.params.id!, req.actor!) : getVendorBankChange(db, req.params.id!, req.actor!)
     ) as { events?: unknown } | undefined;
     if (!record) return res.status(404).json({ error: "not_found", message: "Record not found" });
     return res.json({ events: record.events ?? [] });
@@ -309,13 +314,13 @@ export function createApp(db: Db) {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const q = typeof req.query.q === "string" ? req.query.q : undefined;
     const records =
-      entityOf(req) === "refund_request" ? listRefunds(db, { status, q }) : listVendorBankChanges(db, { status, q });
+      entityOf(req) === "refund_request" ? listRefunds(db, req.actor!, { status, q }) : listVendorBankChanges(db, req.actor!, { status, q });
     res.json({ records });
   });
 
   app.get("/api/apps/:appId/records/:id", withApp("record.read"), (req, res) => {
     const record =
-      entityOf(req) === "refund_request" ? getRefund(db, req.params.id!) : getVendorBankChange(db, req.params.id!);
+      entityOf(req) === "refund_request" ? getRefund(db, req.params.id!, req.actor!) : getVendorBankChange(db, req.params.id!, req.actor!);
     if (!record) return res.status(404).json({ error: "not_found", message: "Record not found" });
     return res.json({ record: project(req, record as Record<string, unknown>) });
   });
@@ -340,14 +345,14 @@ export function createApp(db: Db) {
         const parsed = createRefundSchema.safeParse(req.body);
         if (!parsed.success) return res.status(400).json(badBody(parsed.error));
         const created = createRefundRequest(db, req.actor!, parsed.data);
-        return res.status(201).json({ record: project(req, getRefund(db, created.id) as Record<string, unknown>) });
+        return res.status(201).json({ record: project(req, getRefund(db, created.id, req.actor!) as Record<string, unknown>) });
       }
       const parsed = createVendorSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json(badBody(parsed.error));
       const created = createVendorBankChange(db, req.actor!, parsed.data);
       return res
         .status(201)
-        .json({ record: project(req, getVendorBankChange(db, created.id) as Record<string, unknown>) });
+        .json({ record: project(req, getVendorBankChange(db, created.id, req.actor!) as Record<string, unknown>) });
     } catch (err) {
       return next(err);
     }
@@ -382,8 +387,8 @@ export function createApp(db: Db) {
           record: project(
             req,
             (refundWorkflow
-              ? getRefund(db, result.record.id)
-              : getVendorBankChange(db, result.record.id)) as Record<string, unknown>,
+              ? getRefund(db, result.record.id, req.actor!)
+              : getVendorBankChange(db, result.record.id, req.actor!)) as Record<string, unknown>,
           ),
           duplicate: result.duplicate,
           note: approved

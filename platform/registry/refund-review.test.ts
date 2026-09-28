@@ -468,7 +468,7 @@ describe("atomicity", () => {
     expect(() =>
       decideRefund(
         db,
-        { id: APPROVER_A, role: "approver", displayName: "Theo" },
+        { id: APPROVER_A, role: "approver", displayName: "Theo", scope: "us-ops" },
         {
           id: "rr_2001",
           action: "approve",
@@ -492,7 +492,7 @@ describe("atomicity", () => {
     expect(() =>
       decideRefund(
         db,
-        { id: APPROVER_A, role: "approver", displayName: "Theo" },
+        { id: APPROVER_A, role: "approver", displayName: "Theo", scope: "us-ops" },
         { id: "rr_2007", action: "approve", reason: "already rejected record", expectedVersion: 2 },
       ),
     ).toThrow(DecisionError);
