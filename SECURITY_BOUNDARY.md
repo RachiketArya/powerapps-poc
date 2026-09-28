@@ -38,12 +38,20 @@ Every item below has at least one test in `platform/**/*.test.ts` that calls the
 
 Apps on the same workflow read the same records: there are no per-app or per-tenant record entitlements. Narrowing an app's capabilities constrains *that app's* surface, and it is enforced server-side for that app — but if the same user may also use a broader app on the same workflow, they reach the same data through it. Do not treat an app's capability set as a data boundary for a user.
 
+**Per-user resource scope (team scope)**
+
+- Every user and record carries a `scope` (`us-ops`, `emea-ops`, seeded fixtures). `*` is platform oversight: it reads across scopes and is in no workflow's decision roles, and it cannot create business records.
+- The actor's scope is resolved server-side with the rest of the actor; it cannot be supplied or widened by a request body.
+- Lists filter by scope; detail, audit and decision paths answer `404` for a foreign-scope record identically to a missing id, so a guessed id reveals nothing. Creates refuse a payment outside the actor's scope before any balance validation, so a foreign id cannot even be probed through a validation error. A created refund takes the payment's scope, so a record can never land in the wrong team's queue.
+- Scope is re-checked on every request — including before an idempotent replay — so revoked access receives `404`, not a cached result. An empty or missing scope fails closed on reads and writes alike.
+- Scope is a coarse team boundary, not row-level multi-tenancy, and `*` is an oversight carve-out that would map to a supervised role in a real deployment.
+
 **Runtime business controls (ported from Decision Desk)**
 
 - No session → `401`. Viewer → `403`. Actor and role fields in request bodies are never read.
 - Who may decide comes from one place: the workflow's `decisionRoles` in the platform registry. The kernel has no role of its own, and both the API and the UI read the same value, so narrowing platform policy narrows the API and not only the buttons.
 - An approver cannot decide their own request, regardless of role.
-- A reason is required; the vendor workflow additionally requires a 20-character approval reason and refuses approval when the only verification was an inbound email.
+- A reason is required, measured after whitespace normalization so padding cannot satisfy the floor; the vendor workflow additionally requires a 20-character approval reason and refuses approval when the only verification was an inbound email.
 - Optimistic versions: a stale `expectedVersion` is refused.
 - Idempotency replay is bound to entity type, entity id, actor, action, normalized reason and expected version; any other reuse of the key is `409 idempotency_conflict` and changes nothing.
 - Refund approvals cannot cumulatively exceed a payment's remaining refundable balance; the reservation is re-checked inside the decision transaction.

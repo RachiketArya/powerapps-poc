@@ -155,6 +155,84 @@ describe("scope changes and degraded rows fail closed", () => {
     const list = await request(app).get("/api/apps/refund-review/records?status=all").set("Cookie", cookie);
     expect(list.body.records).toEqual([]);
   });
+
+  it("fails closed on creates too: an empty-scope user cannot write a record", async () => {
+    db.prepare(`UPDATE users SET scope = '' WHERE id = ?`).run(REQUESTER);
+    const cookie = await login(REQUESTER);
+    const refund = await request(app)
+      .post("/api/apps/refund-review/records")
+      .set("Cookie", cookie)
+      .send({ paymentId: "pay_1001", amountCents: 100, reason: "empty scope should not write" });
+    expect(refund.status).toBe(403);
+    const vendor = await request(app)
+      .post("/api/apps/vendor-bank-change-review/records")
+      .set("Cookie", cookie)
+      .send({
+        vendorName: "Scope probe (synthetic)",
+        currentMaskedRef: "\u2022\u2022\u2022\u2022-\u2022\u2022\u2022\u2022-1111",
+        newMaskedRef: "\u2022\u2022\u2022\u2022-\u2022\u2022\u2022\u2022-2222",
+        country: "US",
+        verificationChannel: "callback_to_known_number",
+        reason: "empty scope should not write",
+      });
+    expect(vendor.status).toBe(403);
+    const vendorRows = db
+      .prepare(`SELECT COUNT(*) AS n FROM vendor_bank_changes WHERE vendor_name LIKE 'Scope probe%'`)
+      .get() as { n: number };
+    expect(vendorRows.n).toBe(0);
+  });
+
+  it("refuses '*' oversight creating business records, so nothing foreign lands in a team queue", async () => {
+    const cookie = await login(ADMIN);
+    const res = await request(app)
+      .post("/api/apps/refund-review/records")
+      .set("Cookie", cookie)
+      .send({ paymentId: "pay_7001", amountCents: 100, reason: "oversight must not write into a scope" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden_role");
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM refund_requests WHERE payment_id = 'pay_7001'`).get() as {
+      n: number;
+    };
+    expect(n.n).toBe(2);
+  });
+
+  it("stamps a created refund with the payment's scope, not the caller's", async () => {
+    const cookie = await login(REQUESTER);
+    const res = await request(app)
+      .post("/api/apps/refund-review/records")
+      .set("Cookie", cookie)
+      .send({ paymentId: "pay_1001", amountCents: 50, reason: "in-scope creation keeps its scope" });
+    expect(res.status).toBe(201);
+    const row = db.prepare(`SELECT scope FROM refund_requests WHERE id = ?`).get(res.body.record.id) as {
+      scope: string;
+    };
+    expect(row.scope).toBe("us-ops");
+  });
+
+  it("rejects a vendor approval narrative padded with whitespace to reach 20 characters", async () => {
+    const res = await request(app)
+      .post("/api/apps/vendor-bank-change-review/records/vbc_3001/decision")
+      .set("Cookie", await login(APPROVER))
+      .send({
+        decision: "approve",
+        reason: "OK                         verified",
+        expectedVersion: 1,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("domain_rule");
+    expect(db.prepare(`SELECT status FROM vendor_bank_changes WHERE id = 'vbc_3001'`).get()).toEqual({
+      status: "pending",
+    });
+  });
+
+  it("rejects a refund reason padded with whitespace to reach 5 characters", async () => {
+    const res = await request(app)
+      .post("/api/apps/refund-review/records/rr_2001/decision")
+      .set("Cookie", await login(APPROVER))
+      .send({ decision: "approve", reason: "ok\t \n", expectedVersion: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("reason_required");
+  });
 });
 
 describe("platform oversight scope", () => {
@@ -179,5 +257,18 @@ describe("platform oversight scope", () => {
     expect(ids).toEqual(["rr_eu_8002", "rr_eu_8001"]);
     const us = await request(app).get("/api/apps/refund-review/records/rr_2001").set("Cookie", cookie);
     expect(us.status).toBe(404);
+  });
+});
+
+describe("scopeAllows fails closed on malformed input", () => {
+  it("never matches when either side is empty or missing", async () => {
+    const { scopeAllows } = await import("../kernel/decision-service.js");
+    expect(scopeAllows({ scope: "" }, "")).toBe(false);
+    expect(scopeAllows({ scope: "" }, "us-ops")).toBe(false);
+    expect(scopeAllows({ scope: "us-ops" }, "")).toBe(false);
+    expect(scopeAllows({ scope: "us-ops" }, undefined)).toBe(false);
+    expect(scopeAllows({ scope: "*" }, "")).toBe(true);
+    expect(scopeAllows({ scope: "us-ops" }, "us-ops")).toBe(true);
+    expect(scopeAllows({ scope: "us-ops" }, "emea-ops")).toBe(false);
   });
 });

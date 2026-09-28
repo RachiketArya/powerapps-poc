@@ -168,6 +168,12 @@ export function createRefundRequest(
   if (actor.role === "viewer") {
     throw new ValidationError("forbidden_role", "Viewers may not create refund requests", 403);
   }
+  if (!actor.scope || actor.scope === "*") {
+    // Business records are raised inside a team scope. Platform oversight
+    // reads everywhere but owns no queue, and a malformed empty scope fails
+    // closed.
+    throw new ValidationError("forbidden_role", "Only a scoped business actor may create refund requests", 403);
+  }
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
     throw new ValidationError("invalid_amount", "Amount must be a positive integer number of cents");
   }
@@ -190,9 +196,10 @@ export function createRefundRequest(
         `Amount exceeds the remaining refundable balance of ${remaining} cents`,
       );
     }
-    // The record belongs to the creator's scope; a body cannot place it
-    // inside another team's queue.
-    const scope = actor.scope === "*" ? "us-ops" : actor.scope;
+    // The record belongs to the payment's scope, not whatever the caller's
+    // own scope happens to be — an actor may only reach a payment inside
+    // their scope, so the record can never land in the wrong team's queue.
+    const scope = payment.scope;
     const id = `rr_${randomUUID().slice(0, 8)}`;
     const createdAt = new Date().toISOString();
     db.prepare(

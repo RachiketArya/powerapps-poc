@@ -116,15 +116,21 @@ function normalizeReason(reason: string): string {
   return reason.trim().replace(/\s+/g, " ");
 }
 
-/** Whether an actor may touch a record in `scope`. "*" is platform oversight. */
-export function scopeAllows(actor: { scope: string }, recordScope: string): boolean {
-  return actor.scope === "*" || actor.scope === recordScope;
+/**
+ * Whether an actor may touch a record in `scope`. "*" is platform oversight.
+ * Fails closed: an empty or missing scope on either side never matches, so a
+ * malformed user row cannot read or write anything.
+ */
+export function scopeAllows(actor: { scope: string }, recordScope: string | undefined | null): boolean {
+  return actor.scope === "*" || (!!actor.scope && !!recordScope && actor.scope === recordScope);
 }
 
 /**
  * Shared reason floor, reused by the kernel and by domain validators that
  * need a stricter length (the vendor workflow's 20-character approval
- * narrative). Kept in one place so the two checks cannot drift apart.
+ * narrative). The measured length is the whitespace-normalized reason — the
+ * same form the audit trail stores — so padding cannot be used to satisfy a
+ * floor. Kept in one place so the checks cannot drift apart.
  */
 export function assertReasonLength(
   reason: string,
@@ -132,7 +138,7 @@ export function assertReasonLength(
   message: string,
   code: "reason_required" | "domain_rule" = "reason_required",
 ): void {
-  if (reason.trim().length < min) {
+  if (normalizeReason(reason).length < min) {
     throw new DecisionError(code, message, 400);
   }
 }

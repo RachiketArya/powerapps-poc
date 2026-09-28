@@ -32,6 +32,7 @@ import {
   listVendorBankChanges,
 } from "../registry/vendor-bank-change-review.js";
 import { APPROVED_CONNECTORS, allWorkflows, getWorkflow } from "../registry/index.js";
+import { PORTFOLIO } from "../portfolio.js";
 import { validateDefinition } from "../manifest/schema.js";
 import {
   PromotionError,
@@ -128,6 +129,14 @@ export function createApp(db: Db) {
   app.use("/api", requireSession);
 
   // ---------------------------------------------------------------- platform
+
+  app.get("/api/portfolio", (_req, res) => {
+    res.json({
+      entries: PORTFOLIO,
+      notice:
+        "Runnable means a promoted definition exists in this runtime. Planned entries are roadmap only — no code, telemetry or test counts are implied. Owners are proposed roles, not real teams.",
+    });
+  });
 
   app.get("/api/platform/registry", (_req, res) => {
     res.json({

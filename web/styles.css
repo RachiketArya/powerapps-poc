@@ -549,3 +549,20 @@ details summary {
     position: static;
   }
 }
+
+.inspection {
+  border: 1px solid #d5e0ee;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 12px 0;
+  background: #ffffff;
+}
+.inspection h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.fields.compact > div { display: flex; gap: 8px; }
+.fields.compact dt { width: 170px; color: #4a6785; }
+.compare { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.compare code { display: block; font-size: 1.05rem; margin-top: 2px; }
+.checklist { list-style: none; padding: 0; margin: 10px 0 0; }
+.checklist li { padding: 4px 0; }
+.portfolio { margin-top: 28px; }
+.portfolio h2 { font-size: 1.05rem; }

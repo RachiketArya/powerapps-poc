@@ -119,6 +119,9 @@ export function createVendorBankChange(
   if (actor.role === "viewer") {
     throw new ValidationError("forbidden_role", "Viewers may not raise vendor bank changes", 403);
   }
+  if (!actor.scope || actor.scope === "*") {
+    throw new ValidationError("forbidden_role", "Only a scoped business actor may raise vendor bank changes", 403);
+  }
   if (!input.vendorName?.trim()) {
     throw new ValidationError("invalid_vendor", "A vendor name is required");
   }

@@ -96,13 +96,14 @@ The server refuses to start when `NODE_ENV` or `APP_ENV` looks like production, 
 | `u_apr_mira` | approver | second approver, for separation of duties |
 | `u_view_sam` | viewer | read only |
 | `u_mkr_juno` | maker | draft and validate definitions; **cannot** promote |
-| `u_adm_rhea` | platform_admin | promote definitions into the local catalog |
+| `u_adm_rhea` | platform_admin | promote definitions into the local catalog (oversight scope `*`) |
+| `u_req_ovid` | requester | EMEA team fixture; only sees `emea-ops` records |
 
-The selector is not authentication: anyone reaching this server can assume any identity. Roles are resolved from the demo session cookie server-side and an `actor`/`role` field in a request body is ignored everywhere.
+The selector is not authentication: anyone reaching this server can assume any identity. Roles are resolved from the demo session cookie server-side and an `actor`/`role` field in a request body is ignored everywhere. Every user also has a resource **scope** — `us-ops`, `emea-ops`, or `*` for oversight — and the server enforces it on list, detail, decision, audit and create paths: a foreign-scope record answers `404`, a foreign payment cannot be probed through a create, a created refund takes the payment's scope, and revoked or malformed scope fails closed. UI filters are not authorization.
 
 ## The three surfaces
 
-- **Catalog** — the two promoted apps with workflow, connector, owner, version, digest and status. A definition that fails re-validation on load shows as quarantined and its app refuses to serve.
+- **Catalog** — the two promoted apps with workflow, connector, owner, version, digest and status, plus the **proposed portfolio**: 13 tools with business owner, technical owner, risk tier and lifecycle — only the two built apps are marked runnable; the rest are clearly the roadmap, not built software. A definition that fails re-validation on load shows as quarantined and its app refuses to serve.
 - **Workshop** — paste or edit a definition, validate it without promoting, and (as platform admin) *activate locally*. Prefilled unsafe examples are one click away: unapproved connector URL, removed audit/unknown fields, capability outside the entitlement, markup in labels, invalid workflow. Refusals name the violated policy and the next action.
 - **Activity** — promotion attempts (allowed and denied), decision events, and the last recorded `npm run assure` run read from disk. Nothing there is hard-coded green; with no recorded run it says so, and a failing run displays as failing.
 
@@ -111,6 +112,15 @@ The selector is not authentication: anyone reaching this server can assume any i
 See [SECURITY_BOUNDARY.md](SECURITY_BOUNDARY.md) for what is enforced, what is trusted and what a real deployment would need (branch protection, CODEOWNERS review on `platform/`, a separately controlled CI/deploy identity, network egress policy). [EVIDENCE.md](EVIDENCE.md) records the actual commands, results and timings.
 
 Short version: identity is mock, connectors are local readers, the digest identifies content rather than authenticating an author, the audit trail is append-only through the API but not tamper-proof against whoever owns the database, and the CI workflow in `.github/workflows/` is illustrative — it does not enforce anything until repository rulesets require it.
+
+## Structure
+
+- `platform/` — trusted: kernel, registry, manifest validation, promotion, server. `platform/portfolio.ts` is the 13-entry proposed portfolio.
+- `apps/` — untrusted manifests plus unsafe examples.
+- `web/apps/` — workflow-specific modules (`refund.tsx` with the payment ledger, `vendor.tsx` with the account-compare and verification checklist) over a shared `ReviewSurface` shell and typed client; `web/` — catalog, workshop, activity.
+
+- [OWNERSHIP.md](OWNERSHIP.md) — the app-request contract and proposed role boundaries.
+- [SYSTEM-DESIGN.md](SYSTEM-DESIGN.md) — local runtime vs target phase-gated paved road.
 
 ## Case-study deliverables
 

@@ -1,25 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import {
   ApiError,
   api,
   fieldLabel,
   fieldValue,
-  formatCents,
   formatTime,
   STATUS_LABEL,
   type Actor,
   type CatalogApp,
-  type Payment,
   type RecordDetail,
   type RecordSummary,
-} from "./api";
+} from "../api";
 
 /**
  * One review surface used by both shipped apps. The definition chooses the
  * labels, the columns and which capabilities are offered; every rule applied
  * to a decision lives on the server.
  */
-export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
+export function ReviewSurface({
+  app,
+  actor,
+  renderCreateForm,
+  renderInspection,
+}: {
+  app: CatalogApp;
+  actor: Actor;
+  renderCreateForm: (appId: string, onCreated: (id: string) => Promise<void>) => React.ReactNode;
+  renderInspection?: (record: RecordDetail) => React.ReactNode;
+}) {
   const definition = app.definition!;
   const [status, setStatus] = useState("pending");
   const [query, setQuery] = useState("");
@@ -30,7 +39,6 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
   const [creating, setCreating] = useState(false);
 
   const canCreate = definition.capabilities.includes("record.create");
-  const isRefund = app.workflow?.entityType === "refund_request";
 
   // Creating a record changes the filter and reloads the queue at the same
   // time; only the newest request may write to the table, or the reply to the
@@ -137,18 +145,14 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
             )}
           </div>
 
-          {creating && canCreate && (
-            <CreateForm
-              appId={definition.appId}
-              isRefund={isRefund}
-              onCreated={async (id) => {
-                setCreating(false);
-                setQuery("");
-                setStatus("pending");
-                await afterChange(id);
-              }}
-            />
-          )}
+          {creating &&
+            canCreate &&
+            renderCreateForm(definition.appId, async (id) => {
+              setCreating(false);
+              setQuery("");
+              setStatus("pending");
+              await afterChange(id);
+            })}
 
           {listError && <p className="notice denied">{listError}</p>}
 
@@ -198,6 +202,7 @@ export function AppSurface({ app, actor }: { app: CatalogApp; actor: Actor }) {
               app={app}
               actor={actor}
               record={detail}
+              inspection={renderInspection?.(detail)}
               onDecided={() => afterChange(detail.id)}
               onRefresh={() => afterChange(detail.id)}
             />
@@ -212,12 +217,14 @@ function DetailPanel({
   app,
   actor,
   record,
+  inspection,
   onDecided,
   onRefresh,
 }: {
   app: CatalogApp;
   actor: Actor;
   record: RecordDetail;
+  inspection?: React.ReactNode;
   onDecided: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
@@ -287,6 +294,8 @@ function DetailPanel({
         ))}
       </dl>
 
+      {inspection}
+
       {error && <p className="notice denied">{error}</p>}
       {notice && <p className="notice success">{notice}</p>}
 
@@ -337,133 +346,5 @@ function DetailPanel({
         ))}
       </ol>
     </div>
-  );
-}
-
-function CreateForm({
-  appId,
-  isRefund,
-  onCreated,
-}: {
-  appId: string;
-  isRefund: boolean;
-  onCreated: (id: string) => Promise<void>;
-}) {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!isRefund) return;
-    void api.payments(appId).then((res) => {
-      setPayments(res.payments);
-      setForm((f) => ({ ...f, paymentId: f.paymentId ?? res.payments[0]?.id ?? "" }));
-    });
-  }, [isRefund, appId]);
-
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  async function submit() {
-    setBusy(true);
-    setError(null);
-    try {
-      const input = isRefund
-        ? {
-            paymentId: form.paymentId ?? "",
-            amountCents: Number(form.amount ?? ""),
-            reason: form.reason ?? "",
-          }
-        : {
-            vendorName: form.vendorName ?? "",
-            currentMaskedRef: form.currentMaskedRef ?? "",
-            newMaskedRef: form.newMaskedRef ?? "",
-            country: (form.country ?? "").toUpperCase(),
-            verificationChannel: form.verificationChannel ?? "callback_to_known_number",
-            reason: form.reason ?? "",
-          };
-      const res = await api.createRecord(appId, input);
-      await onCreated(res.record.id);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "The request could not be created.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form
-      className="create"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      {isRefund ? (
-        <>
-          <label>
-            <span>Payment</span>
-            <select value={form.paymentId ?? ""} onChange={(e) => set("paymentId", e.target.value)}>
-              {payments.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.reference} · {formatCents(p.amount_cents, p.currency)} · {formatCents(p.remaining_refundable_cents)}{" "}
-                  refundable
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Amount in cents</span>
-            <input value={form.amount ?? ""} onChange={(e) => set("amount", e.target.value)} inputMode="numeric" />
-          </label>
-        </>
-      ) : (
-        <>
-          <label>
-            <span>Vendor</span>
-            <input value={form.vendorName ?? ""} onChange={(e) => set("vendorName", e.target.value)} />
-          </label>
-          <label>
-            <span>Current account (masked)</span>
-            <input
-              value={form.currentMaskedRef ?? ""}
-              onChange={(e) => set("currentMaskedRef", e.target.value)}
-              placeholder="****3312"
-            />
-          </label>
-          <label>
-            <span>New account (masked)</span>
-            <input
-              value={form.newMaskedRef ?? ""}
-              onChange={(e) => set("newMaskedRef", e.target.value)}
-              placeholder="****8890"
-            />
-          </label>
-          <label>
-            <span>Country</span>
-            <input value={form.country ?? ""} onChange={(e) => set("country", e.target.value)} placeholder="US" />
-          </label>
-          <label>
-            <span>Verification channel</span>
-            <select
-              value={form.verificationChannel ?? "callback_to_known_number"}
-              onChange={(e) => set("verificationChannel", e.target.value)}
-            >
-              <option value="callback_to_known_number">callback to known number</option>
-              <option value="portal_message">portal message</option>
-              <option value="inbound_email_only">inbound email only</option>
-            </select>
-          </label>
-        </>
-      )}
-      <label className="grow">
-        <span>Reason</span>
-        <input value={form.reason ?? ""} onChange={(e) => set("reason", e.target.value)} />
-      </label>
-      <button type="submit" disabled={busy}>
-        Create request
-      </button>
-      {error && <p className="notice denied">{error}</p>}
-    </form>
   );
 }

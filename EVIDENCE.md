@@ -133,3 +133,40 @@ Nothing in the README or this file claims a browser check that has not happened.
 - View field selection is display configuration, not field-level data permission.
 - The CI workflow and CODEOWNERS file are illustrative until repository rulesets require them.
 - Two apps exist. Further queues on this kernel are plausible but unbuilt.
+
+## Phase 2 — paved-road portfolio (branch `codex/paved-road-portfolio`)
+
+Start ~18:52 local (17:50 UTC box clock); active implementation time only — waiting on the user's independent reviews ran in parallel and is not counted as implementation.
+
+### Scope checkpoint `5afc9a9212d537a01f02964810b43612b326e9d1`
+
+Per-user resource scope: `scope` column on users, payments, `refund_requests` and `vendor_bank_changes` (`us-ops`, `emea-ops`, `*` oversight), resolved into the actor server-side. Lists filter by scope; detail, audit, decision and create return 404 for foreign-scope records so a guessed id discloses nothing; the scope check precedes the idempotent replay lookup so revoked access gets 404, not a cached result; creates refuse foreign payments before balance validation. `platform/registry/scope.test.ts` adds the negative API tests. The checkpoint suite was 101/101 green — with the independent-failure distinction below preserved.
+
+**Independent review of the checkpoint found three boundary bugs; all were repaired and regressed:**
+
+| Defect on `5afc9a9` (green suite at the time) | Repair |
+| --- | --- |
+| `scopeAllows({scope:""}, "")` and `scopeAllows({scope:"us-ops"}, undefined)` matched; an empty-scope user could also POST a valid vendor record and get 201 | `scopeAllows` fails closed on empty/missing scopes on either side, and both create paths refuse actors without a real team scope |
+| `*` oversight could POST a refund against an EMEA payment, and the record was stamped `us-ops`, exposing foreign payment detail to the US queue | `*` oversight can no longer create business records at all, and a created refund derives its scope from the authorized payment, never the caller |
+| Vendor approval reason `OK` + 25 spaces + `verified` passed the 20-char floor because the floor measured raw input while the kernel stored the normalized reason | Shared `assertReasonLength` (the phase's shared-maintenance change, reused by the kernel's 5-char floor and the vendor 20-char floor) measures the whitespace-normalized reason |
+
+### Module split and portfolio
+
+- `web/AppSurface.tsx` became a shared `ReviewSurface` shell (`web/apps/shared.tsx`) plus genuinely workflow-specific modules: `web/apps/refund.tsx` (payment-ledger inspection: captured, remaining, this request, projected remaining after approval) and `web/apps/vendor.tsx` (side-by-side masked-ref compare card plus a verification checklist). Dispatch is by the workflow's entity type — a manifest cannot pick a module the platform did not write.
+- `platform/portfolio.ts` + `GET /api/portfolio` + the Catalog's "Proposed portfolio" table: exactly 13 entries with business owner, technical owner, risk tier and lifecycle. Only `refund-review` and `vendor-bank-change-review` are marked runnable; KYC, feature-flag admin and the rest are explicitly planned roadmap. No fabricated health, telemetry or test counts.
+- Docs: `OWNERSHIP.md` (app-request contract, role table, target boundaries, Power Apps code-apps fallback honestly scoped), `SYSTEM-DESIGN.md` (Mermaid: local runtime vs target phase-gated design), README structure/portfolio/scope sections, SECURITY_BOUNDARY scope section.
+
+### Verification on this branch
+
+- `npm run typecheck` — clean
+- `npm test` — 107/107 (11 + 6 scope/boundary regressions)
+- `npm run build` — clean
+- Browser inspection — pending targeted check of the catalog portfolio table and both module inspections
+- `npm audit` — re-run before freeze
+
+### Phase-2 known gaps
+
+- The read-only reconciliation app was not built; it remains a planned portfolio entry rather than a superficial third runnable.
+- Scope is a coarse team boundary, not row-level multi-tenancy; `*` is an oversight carve-out mapped to a supervised role in a real deployment.
+- `CODEOWNERS`, CI and the dev/test/prod deployment identity remain illustrative/target-design, as documented in OWNERSHIP.md.
+- Team names are proposed roles, not real GitHub organizations.
