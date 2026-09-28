@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, formatTime, type Actor, type CatalogApp, type DemoUser } from "./api";
-import { AppSurface } from "./AppSurface";
+import { ApiError, api, formatTime, type Actor, type CatalogApp, type DemoUser, type PortfolioEntry } from "./api";
+import { ReviewSurface } from "./apps/shared";
+import { RefundReviewApp } from "./apps/refund";
+import { VendorBankChangeApp } from "./apps/vendor";
 import { Workshop } from "./Workshop";
 import { Activity } from "./Activity";
 
@@ -113,7 +115,7 @@ export default function App() {
           {actor && view.kind === "workshop" && <Workshop actor={actor} onPromoted={() => void refreshCatalog()} />}
           {actor && view.kind === "activity" && <Activity actorId={actor.id} />}
           {actor && view.kind === "app" && current && current.status === "active" && (
-            <AppSurface key={`${current.appId}-${current.version}`} app={current} actor={actor} />
+            <AppModule key={`${current.appId}-${current.version}-${actor.id}`} app={current} actor={actor} />
           )}
           {actor && view.kind === "app" && current && current.status === "quarantined" && (
             <Quarantined app={current} />
@@ -155,7 +157,30 @@ function SignedOut() {
   );
 }
 
+/**
+ * The surface an app gets is chosen by its workflow's entity type, not by the
+ * manifest — a promoted definition cannot pick a module the platform did not
+ * write. Unknown workflows fall back to the plain shared shell.
+ */
+function AppModule({ app, actor }: { app: CatalogApp; actor: Actor }) {
+  const entityType = app.workflow?.entityType;
+  if (entityType === "refund_request") return <RefundReviewApp app={app} actor={actor} />;
+  if (entityType === "vendor_bank_change") return <VendorBankChangeApp app={app} actor={actor} />;
+  return (
+    <ReviewSurface
+      app={app}
+      actor={actor}
+      renderCreateForm={() => null}
+    />
+  );
+}
+
 function Catalog({ apps, onOpen }: { apps: CatalogApp[]; onOpen: (appId: string) => void }) {
+  const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(null);
+  useEffect(() => {
+    void api.portfolio().then((res) => setPortfolio(res.entries)).catch(() => setPortfolio(null));
+  }, []);
+  const catalogIds = new Set(apps.map((a) => a.appId));
   return (
     <div className="surface">
       <header className="surface-head">
@@ -210,6 +235,51 @@ function Catalog({ apps, onOpen }: { apps: CatalogApp[]; onOpen: (appId: string)
           ))}
         </tbody>
       </table>
+      {portfolio && (
+        <section className="portfolio">
+          <h2>Proposed portfolio</h2>
+          <p className="muted small">
+            Thirteen tools proposed on this paved road. Only entries shown as runnable exist in this runtime; the rest
+            are the roadmap, not built software. Owners are proposed roles, not real teams.
+          </p>
+          <table className="records catalog">
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Business owner</th>
+                <th>Technical owner</th>
+                <th>Risk</th>
+                <th>Status</th>
+                <th>Rides on</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {portfolio.map((p) => (
+                <tr key={p.appId}>
+                  <td>
+                    <strong>{p.title}</strong>
+                  </td>
+                  <td>{p.businessOwner}</td>
+                  <td>{p.technicalOwner}</td>
+                  <td>{p.riskTier}</td>
+                  <td className={p.runnable ? "success-text" : "muted"}>
+                    {p.runnable ? "Runnable" : "Planned"}
+                  </td>
+                  <td className="muted small">{p.sharedPlatform.join(", ")}</td>
+                  <td>
+                    {catalogIds.has(p.appId) && (
+                      <button type="button" className="secondary" onClick={() => onOpen(p.appId)}>
+                        Open
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
       <p className="muted small">
         Two queues were built for this proof; anything activated beyond them is a reconfiguration of the same two
         workflows. Ten further queues are plausible on this kernel but are not built.

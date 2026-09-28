@@ -11,6 +11,20 @@ export interface Actor {
   id: string;
   role: Role;
   displayName: string;
+  scope: string;
+}
+
+export interface PortfolioEntry {
+  appId: string;
+  title: string;
+  businessOwner: string;
+  technicalOwner: string;
+  riskTier: "low" | "medium" | "high";
+  lifecycle: "demo" | "planned";
+  runnable: boolean;
+  workflow: string | null;
+  sharedPlatform: readonly string[];
+  evidence: string | null;
 }
 
 export interface Violation {
@@ -174,6 +188,8 @@ export const api = {
   logout: () => call<{ ok: true }>("/api/session", { method: "DELETE" }),
 
   catalog: () => call<{ apps: CatalogApp[] }>("/api/catalog"),
+  portfolio: () => call<{ entries: PortfolioEntry[]; notice: string }>("/api/portfolio"),
+
   registry: () => call<{ workflows: WorkflowSpec[]; connectors: Array<{ id: string; title: string; description: string }>; notice: string }>(
     "/api/platform/registry",
   ),

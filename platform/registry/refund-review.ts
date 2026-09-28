@@ -4,6 +4,7 @@ import {
   DecisionError,
   decide,
   recordCreatedEvent,
+  scopeAllows,
   type Actor,
   type DecidableRecord,
   type DecisionAction,
@@ -51,10 +52,19 @@ export function remainingRefundableCents(db: Db, paymentId: string): number {
 
 export function listRefunds(
   db: Db,
+  actor: Actor,
   opts: { status?: string; q?: string },
 ): ReturnType<typeof shapeRow>[] {
   const clauses: string[] = [];
   const params: unknown[] = [];
+  if (actor.scope !== "*") {
+    if (!actor.scope) {
+      // Empty scope fails closed even if a degraded row also has one.
+      return [];
+    }
+    clauses.push(`r.scope = ?`);
+    params.push(actor.scope);
+  }
   if (opts.status && opts.status !== "all") {
     clauses.push(`r.status = ?`);
     params.push(opts.status);
@@ -83,7 +93,7 @@ export function listRefunds(
   return rows.map((row) => shapeRow(row));
 }
 
-export function getRefund(db: Db, id: string) {
+export function getRefund(db: Db, id: string, actor: Actor) {
   const row = db
     .prepare(
       `SELECT r.*, p.reference, p.customer_label, p.amount_cents AS payment_amount_cents,
@@ -96,7 +106,7 @@ export function getRefund(db: Db, id: string) {
         WHERE r.id = ?`,
     )
     .get(id) as Record<string, never> | undefined;
-  if (!row) return undefined;
+  if (!row || !scopeAllows(actor, (row as unknown as RefundRequestRow).scope)) return undefined;
   const shaped = shapeRow(row);
   const events = db
     .prepare(
@@ -130,6 +140,7 @@ function shapeRow(row: Record<string, never>) {
     decider_name: (row["decider_name"] as unknown as string) ?? null,
     decided_at: r.decided_at,
     decision_reason: r.decision_reason,
+    scope: r.scope,
     // The adapter answers in the registry's field vocabulary, flat, so a
     // definition selecting `payment_reference` gets a value instead of a
     // nested object the surface would have to know how to unpack. Payment
@@ -161,6 +172,12 @@ export function createRefundRequest(
   if (actor.role === "viewer") {
     throw new ValidationError("forbidden_role", "Viewers may not create refund requests", 403);
   }
+  if (!actor.scope || actor.scope === "*") {
+    // Business records are raised inside a team scope. Platform oversight
+    // reads everywhere but owns no queue, and a malformed empty scope fails
+    // closed.
+    throw new ValidationError("forbidden_role", "Only a scoped business actor may create refund requests", 403);
+  }
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
     throw new ValidationError("invalid_amount", "Amount must be a positive integer number of cents");
   }
@@ -170,6 +187,12 @@ export function createRefundRequest(
   }
 
   const tx = db.transaction(() => {
+    const payment = db.prepare(`SELECT scope FROM payments WHERE id = ?`).get(input.paymentId) as
+      | { scope: string }
+      | undefined;
+    if (!payment || !scopeAllows(actor, payment.scope)) {
+      throw new ValidationError("not_found", "Payment not found", 404);
+    }
     const remaining = remainingRefundableCents(db, input.paymentId);
     if (input.amountCents > remaining) {
       throw new ValidationError(
@@ -177,13 +200,17 @@ export function createRefundRequest(
         `Amount exceeds the remaining refundable balance of ${remaining} cents`,
       );
     }
+    // The record belongs to the payment's scope, not whatever the caller's
+    // own scope happens to be — an actor may only reach a payment inside
+    // their scope, so the record can never land in the wrong team's queue.
+    const scope = payment.scope;
     const id = `rr_${randomUUID().slice(0, 8)}`;
     const createdAt = new Date().toISOString();
     db.prepare(
       `INSERT INTO refund_requests
-         (id, payment_id, amount_cents, reason, status, version, requested_by, created_at)
-       VALUES (?, ?, ?, ?, 'pending', 1, ?, ?)`,
-    ).run(id, input.paymentId, input.amountCents, reason, actor.id, createdAt);
+         (id, payment_id, amount_cents, reason, status, version, requested_by, created_at, scope)
+       VALUES (?, ?, ?, ?, 'pending', 1, ?, ?, ?)`,
+    ).run(id, input.paymentId, input.amountCents, reason, actor.id, createdAt, scope);
     recordCreatedEvent({
       db,
       entityType: "refund_request",

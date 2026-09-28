@@ -131,7 +131,7 @@ describe("shared controls are inherited by the vendor queue", () => {
     expect(() =>
       decideVendorBankChange(
         db,
-        { id: APPROVER_A, role: "approver", displayName: "Theo" },
+        { id: APPROVER_A, role: "approver", displayName: "Theo", scope: "us-ops" },
         {
           id: "vbc_3001",
           action: "approve",

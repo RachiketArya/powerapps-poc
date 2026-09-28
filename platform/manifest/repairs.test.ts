@@ -156,7 +156,7 @@ describe("cross-app data routes are scoped or restricted", () => {
 
 describe("promotion cannot destroy the previous release", () => {
   it("leaves the active release intact when the content write fails", async () => {
-    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea" };
+    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea", scope: "*" };
     const base = template("refund-review.app.json");
     const before = loadApp(db, "refund-review")!;
     expect(before.status).toBe("active");
@@ -180,7 +180,7 @@ describe("promotion cannot destroy the previous release", () => {
   });
 
   it("leaves the active release intact when the catalog commit fails", async () => {
-    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea" };
+    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea", scope: "*" };
     const before = loadApp(db, "refund-review")!;
     const beforeBody = fs.readFileSync(before.sourcePath!, "utf8");
 
@@ -203,7 +203,7 @@ describe("promotion cannot destroy the previous release", () => {
   });
 
   it("gives each release its own immutable file so a new version never overwrites the old one", async () => {
-    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea" };
+    const admin = { id: ADMIN, role: "platform_admin" as const, displayName: "Rhea", scope: "*" };
     const v1 = loadApp(db, "refund-review")!;
     const v2 = promoteDefinition(db, admin, { ...template("refund-review.app.json"), title: "Refund review v2" });
     expect(v2.version).toBe(2);

@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('requester', 'approver', 'viewer', 'maker', 'platform_admin')),
-  team TEXT NOT NULL
+  team TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'us-ops'
 );
 
 CREATE TABLE IF NOT EXISTS demo_sessions (
@@ -27,7 +28,8 @@ CREATE TABLE IF NOT EXISTS payments (
   customer_label TEXT NOT NULL,
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
   currency TEXT NOT NULL,
-  captured_at TEXT NOT NULL
+  captured_at TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'us-ops'
 );
 
 CREATE TABLE IF NOT EXISTS refund_requests (
@@ -41,7 +43,8 @@ CREATE TABLE IF NOT EXISTS refund_requests (
   created_at TEXT NOT NULL,
   decided_by TEXT REFERENCES users(id),
   decided_at TEXT,
-  decision_reason TEXT
+  decision_reason TEXT,
+  scope TEXT NOT NULL DEFAULT 'us-ops'
 );
 
 CREATE TABLE IF NOT EXISTS vendor_bank_changes (
@@ -58,7 +61,8 @@ CREATE TABLE IF NOT EXISTS vendor_bank_changes (
   created_at TEXT NOT NULL,
   decided_by TEXT REFERENCES users(id),
   decided_at TEXT,
-  decision_reason TEXT
+  decision_reason TEXT,
+  scope TEXT NOT NULL DEFAULT 'us-ops'
 );
 
 CREATE TABLE IF NOT EXISTS decision_events (
@@ -117,6 +121,14 @@ export function openDb(file: string): Db {
   }
   const db = new Database(file);
   db.exec(SCHEMA);
+  // CREATE TABLE IF NOT EXISTS does not add columns to a database that
+  // predates them; existing local databases get the scope column here.
+  for (const table of ["users", "payments", "refund_requests", "vendor_bank_changes"]) {
+    const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Array<{ name: string }>;
+    if (!columns.some((c) => c.name === "scope")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN scope TEXT NOT NULL DEFAULT 'us-ops'`);
+    }
+  }
   return db;
 }
 

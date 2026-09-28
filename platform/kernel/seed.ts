@@ -15,36 +15,51 @@ export const DEMO_USERS = [
     display_name: "Nadia Okoro (Support Ops)",
     role: "requester" as const,
     team: "Customer Support",
+    scope: "us-ops",
   },
   {
     id: "u_apr_theo",
     display_name: "Theo Lindqvist (Risk Review)",
     role: "approver" as const,
     team: "Risk",
+    scope: "us-ops",
   },
   {
     id: "u_apr_mira",
     display_name: "Mira Castellanos (Risk Review)",
     role: "approver" as const,
     team: "Risk",
+    scope: "us-ops",
   },
   {
     id: "u_view_sam",
     display_name: "Sam Deverell (Audit, read-only)",
     role: "viewer" as const,
     team: "Internal Audit",
+    scope: "us-ops",
   },
   {
     id: "u_mkr_juno",
     display_name: "Juno Aparicio (Ops maker)",
     role: "maker" as const,
     team: "Payments Operations",
+    scope: "us-ops",
   },
   {
     id: "u_adm_rhea",
     display_name: "Rhea Vanterpool (Platform admin)",
     role: "platform_admin" as const,
     team: "Internal Platform",
+    // "*" is platform oversight: it may look at every scope, but it is in
+    // no workflow's decisionRoles, so it still cannot decide.
+    scope: "*",
+  },
+  {
+    id: "u_req_ovid",
+    display_name: "Ovid Marchetti (Support Ops, EMEA)",
+    role: "requester" as const,
+    team: "Customer Support EMEA",
+    scope: "emea-ops",
   },
 ];
 
@@ -62,7 +77,9 @@ const PAYMENTS = [
   ["pay_1004", "SYN-PAY-1004", "Acct 7781 · Synthetic customer D", 1_200_00, "USD", "2026-09-09T13:27:00.000Z"],
   ["pay_1005", "SYN-PAY-1005", "Acct 2043 · Synthetic customer E", 349_99, "USD", "2026-09-11T19:55:00.000Z"],
   ["pay_1006", "SYN-PAY-1006", "Acct 6672 · Synthetic customer F", 15_000_00, "USD", "2026-09-14T07:09:00.000Z"],
+  ["pay_7001", "SYN-PAY-7001", "Acct 5190 · Synthetic customer G (EMEA)", 2_400_00, "EUR", "2026-09-13T11:20:00.000Z"],
 ] as const;
+const PAYMENT_SCOPE: Record<string, string> = { pay_7001: "emea-ops" };
 
 const REFUNDS = [
   ["rr_2001", "pay_1001", 25_00, "Duplicate charge reported by cardholder", "pending", "u_req_nadia", "2026-09-15T09:00:00.000Z"],
@@ -73,14 +90,19 @@ const REFUNDS = [
   ["rr_2006", "pay_1004", 150_00, "Follow-up goodwill credit, same order", "pending", "u_req_nadia", "2026-09-15T11:31:00.000Z"],
   ["rr_2007", "pay_1005", 349_99, "Chargeback pre-empt, customer dispute filed", "rejected", "u_req_nadia", "2026-09-13T14:20:00.000Z"],
   ["rr_2008", "pay_1006", 5_000_00, "Contract renegotiation credit, finance sign-off pending", "pending", "u_apr_theo", "2026-09-15T12:05:00.000Z"],
+  ["rr_eu_8001", "pay_7001", 400_00, "Duplicate charge reported by EMEA cardholder", "pending", "u_req_ovid", "2026-09-15T08:40:00.000Z"],
+  ["rr_eu_8002", "pay_7001", 250_00, "Service credit for EMEA outage window", "pending", "u_req_ovid", "2026-09-15T08:55:00.000Z"],
 ] as const;
+const REFUND_SCOPE: Record<string, string> = { rr_eu_8001: "emea-ops", rr_eu_8002: "emea-ops" };
 
 const VENDOR_CHANGES = [
   ["vbc_3001", "Northwind Logistics (synthetic)", "••••-••••-4417", "••••-••••-8890", "US", "callback_to_known_number", "Bank merger; new remittance details confirmed by callback", "pending", "u_req_nadia", "2026-09-15T09:40:00.000Z"],
   ["vbc_3002", "Halcyon Data Co (synthetic)", "••••-••••-2231", "••••-••••-7745", "IE", "inbound_email_only", "Vendor emailed new treasury provider details", "pending", "u_req_nadia", "2026-09-15T10:12:00.000Z"],
   ["vbc_3003", "Meridian Facilities (synthetic)", "••••-••••-5560", "••••-••••-3308", "GB", "portal_message", "Change submitted through the vendor portal", "pending", "u_apr_theo", "2026-09-15T10:55:00.000Z"],
   ["vbc_3004", "Brightpath Cleaning (synthetic)", "••••-••••-9902", "••••-••••-1123", "US", "inbound_email_only", "Requested by email only; callback number unreachable", "rejected", "u_req_nadia", "2026-09-12T15:10:00.000Z"],
+  ["vbc_eu_9001", "Aurelia Freight (synthetic)", "••••-••••-7788", "••••-••••-4402", "IE", "portal_message", "EMEA vendor change submitted through the portal", "pending", "u_req_ovid", "2026-09-15T09:05:00.000Z"],
 ] as const;
+const VENDOR_SCOPE: Record<string, string> = { vbc_eu_9001: "emea-ops" };
 
 export function seed(db: Db): void {
   const tx = db.transaction(() => {
@@ -96,21 +118,22 @@ export function seed(db: Db): void {
     );
 
     const insUser = db.prepare(
-      `INSERT INTO users (id, display_name, role, team) VALUES (@id, @display_name, @role, @team)`,
+      `INSERT INTO users (id, display_name, role, team, scope) VALUES (@id, @display_name, @role, @team, @scope)`,
     );
     for (const u of DEMO_USERS) insUser.run(u);
 
+
     const insPay = db.prepare(
-      `INSERT INTO payments (id, reference, customer_label, amount_cents, currency, captured_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO payments (id, reference, customer_label, amount_cents, currency, captured_at, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const p of PAYMENTS) insPay.run(...p);
+    for (const p of PAYMENTS) insPay.run(...p, PAYMENT_SCOPE[p[0]] ?? "us-ops");
 
     const insRefund = db.prepare(
       `INSERT INTO refund_requests
          (id, payment_id, amount_cents, reason, status, requested_by, created_at,
-          decided_by, decided_at, decision_reason, version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          decided_by, decided_at, decision_reason, version, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insEvent = db.prepare(
       `INSERT INTO decision_events
@@ -134,6 +157,7 @@ export function seed(db: Db): void {
         decided ? createdAt : null,
         decided ? "Reviewed against seeded synthetic policy" : null,
         decided ? 2 : 1,
+        REFUND_SCOPE[id] ?? "us-ops",
       );
       insEvent.run(
         `ev_${id}_c`,
@@ -172,8 +196,8 @@ export function seed(db: Db): void {
     const insVendor = db.prepare(
       `INSERT INTO vendor_bank_changes
          (id, vendor_name, current_masked_ref, new_masked_ref, country, verification_channel,
-          reason, status, requested_by, created_at, decided_by, decided_at, decision_reason, version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          reason, status, requested_by, created_at, decided_by, decided_at, decision_reason, version, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const [id, vendor, oldRef, newRef, country, channel, reason, status, requestedBy, createdAt] of VENDOR_CHANGES) {
       const decided = status !== "pending";
@@ -193,6 +217,7 @@ export function seed(db: Db): void {
         decided ? createdAt : null,
         decided ? decisionReason : null,
         decided ? 2 : 1,
+        VENDOR_SCOPE[id] ?? "us-ops",
       );
       insEvent.run(
         `ev_${id}_c`,
@@ -239,7 +264,7 @@ export function seed(db: Db): void {
  */
 export function seedCatalog(db: Db): void {
   const admin = DEMO_USERS.find((u) => u.role === "platform_admin")!;
-  const actor = { id: admin.id, role: admin.role, displayName: admin.display_name };
+  const actor = { id: admin.id, role: admin.role, displayName: admin.display_name, scope: admin.scope };
   for (const name of STARTER_APP_FILES) {
     const file = path.join(repoRoot(), "apps", name);
     const raw: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
